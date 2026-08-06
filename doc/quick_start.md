@@ -10,17 +10,14 @@ and iOS. Inputs may come from local paths or in-memory bytes.
 - Android API 24+
 - iOS 13+
 
-During review, install from Git:
+Install the latest compatible release:
 
-```yaml
-dependencies:
-  pluviora:
-    git:
-      url: https://github.com/jiangyin14/Pluviora.git
-      ref: main
+```bash
+flutter pub add pluviora
 ```
 
-After `0.2.0` is published, use `flutter pub add pluviora`.
+Or add `pluviora: ^0.2.0` under `dependencies` in `pubspec.yaml` and run
+`flutter pub get`.
 
 ## Prepare inputs
 
@@ -32,6 +29,49 @@ preview_bundle/
 ├── background.avif   # optional
 └── overlays/         # optional named images
 ```
+
+## Supported document structure
+
+The document root requires `meta`, `bpms`, `lines`, `animations`, and
+`storyboardObjects`. Arrays may be empty when that feature is unused. A minimal
+loadable document looks like this:
+
+```json
+{
+  "meta": {
+    "Title": "Example",
+    "Composer": "Creator",
+    "Illustrator": "Artist",
+    "Beatmapper": "Author",
+    "Difficulty": "Normal",
+    "DifficultyValue": 1
+  },
+  "bpms": [
+    {"start": 0, "bpm": 120}
+  ],
+  "lines": [
+    {
+      "notes": [
+        {
+          "bpm": 0,
+          "startTime": 1,
+          "endTime": 1,
+          "type": 0,
+          "isFake": false,
+          "isAlwaysPerfect": false
+        }
+      ]
+    }
+  ],
+  "animations": [],
+  "storyboardObjects": []
+}
+```
+
+`bpm` and `bpmId` values reference entries in the `bpms` array. Optional
+`AudioFile` and `IllustrationFile` values inside `meta` are metadata only; the
+actual audio and background inputs are supplied through `PluvioraSource`.
+Malformed or unsupported fields cause a `PluvioraException` during loading.
 
 ## Add a player
 

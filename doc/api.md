@@ -27,6 +27,8 @@ PluvioraSource.files(
 ```
 
 The optional companion script is treated as untrusted text and never executed.
+The required JSON root fields and a minimal valid example are documented in the
+[quick start](quick_start.md#supported-document-structure).
 
 ## Player
 

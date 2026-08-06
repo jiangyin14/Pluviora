@@ -9,8 +9,6 @@ Flutter audio, image decoding, and Canvas rendering. It is designed for apps
 that need deterministic, high-performance previews of supported JSON documents
 with synchronized audio and optional companion resources.
 
-Version `0.2.0` is awaiting repository review and has not been published.
-
 Documentation: [Quick start](https://github.com/jiangyin14/Pluviora/blob/main/doc/quick_start.md) ·
 [API guide](https://github.com/jiangyin14/Pluviora/blob/main/doc/api.md) ·
 [Architecture and ABI](https://github.com/jiangyin14/Pluviora/blob/main/doc/architecture.md)
@@ -32,22 +30,17 @@ Documentation: [Quick start](https://github.com/jiangyin14/Pluviora/blob/main/do
 - Android API 24+
 - iOS 13+
 
-## Install for review
-
-Until `0.2.0` is approved and published, use the Git repository:
-
-```yaml
-dependencies:
-  pluviora:
-    git:
-      url: https://github.com/jiangyin14/Pluviora.git
-      ref: main
-```
-
-After publication, installation will be:
+## Installation
 
 ```bash
 flutter pub add pluviora
+```
+
+Or add the package directly to `pubspec.yaml`:
+
+```yaml
+dependencies:
+  pluviora: ^0.2.0
 ```
 
 ## Quick start
@@ -97,6 +90,19 @@ optional JavaScript companion may provide static ordering hints; it is scanned
 as text and is never executed. Background and named overlay images are
 optional. The core package only accepts paths or bytes, while file selection is
 kept in the example app.
+
+The JSON root must contain these fields:
+
+| Field | Shape | Purpose |
+| --- | --- | --- |
+| `meta` | object | Title, credits, difficulty, and optional asset names |
+| `bpms` | array | Timing segments with `start` and `bpm` values |
+| `lines` | array | Preview lines and their `notes` arrays |
+| `animations` | array | Time-based property changes for preview objects |
+| `storyboardObjects` | array | Optional visual objects; use an empty array when unused |
+
+See the [quick start](https://github.com/jiangyin14/Pluviora/blob/main/doc/quick_start.md#supported-document-structure)
+for a minimal valid document and input ownership details.
 
 ## Architecture
 

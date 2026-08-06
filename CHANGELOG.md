@@ -1,3 +1,8 @@
+## 0.2.1
+
+- Relaxed the AVIF decoder dependency to remain compatible with applications
+  using newer protobuf releases, without changing the public player API.
+
 ## 0.2.0
 
 - Added the first public Flutter API for special-file previewing.

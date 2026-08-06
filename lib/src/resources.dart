@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:ui' as ui;
 
 import 'package:flutter/services.dart';
-import 'package:flutter_avif/flutter_avif.dart';
 
 import 'models.dart';
 import 'source.dart';
@@ -104,35 +103,6 @@ final class PluvioraPainterResources {
     required String name,
     int? maxWidth,
   }) async {
-    if (_isAvif(bytes, name)) {
-      final frames = await decodeAvif(bytes);
-      if (frames.isEmpty) throw StateError('AVIF 不包含可用帧');
-      final image = frames.first.image;
-      for (final frame in frames.skip(1)) {
-        frame.image.dispose();
-      }
-      if (maxWidth != null && image.width > maxWidth) {
-        final height = (image.height * maxWidth / image.width).round();
-        final recorder = ui.PictureRecorder();
-        ui.Canvas(recorder).drawImageRect(
-          image,
-          ui.Rect.fromLTWH(
-            0,
-            0,
-            image.width.toDouble(),
-            image.height.toDouble(),
-          ),
-          ui.Rect.fromLTWH(0, 0, maxWidth.toDouble(), height.toDouble()),
-          ui.Paint()..filterQuality = ui.FilterQuality.high,
-        );
-        final picture = recorder.endRecording();
-        final resized = await picture.toImage(maxWidth, height);
-        picture.dispose();
-        image.dispose();
-        return resized;
-      }
-      return image;
-    }
     final codec = await ui.instantiateImageCodec(
       bytes,
       targetWidth: maxWidth,
@@ -185,19 +155,5 @@ final class PluvioraPainterResources {
     } catch (_) {
       return const <String>{};
     }
-  }
-
-  static bool _isAvif(Uint8List bytes, String name) {
-    if (name.toLowerCase().endsWith('.avif')) return true;
-    if (bytes.length < 12) return false;
-    return ascii
-            .decode(bytes.sublist(4, 12), allowInvalid: true)
-            .contains('ftyp') &&
-        ascii
-            .decode(
-              bytes.sublist(8, 16.clamp(0, bytes.length)),
-              allowInvalid: true,
-            )
-            .contains(RegExp('avi[fs]'));
   }
 }

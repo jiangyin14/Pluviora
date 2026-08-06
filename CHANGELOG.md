@@ -1,3 +1,10 @@
+## 0.2.2
+
+- Removed the mandatory AVIF plugin dependency so Pluviora can coexist with
+  applications using newer protobuf and `flutter_rust_bridge` releases.
+- Background images now use Flutter's platform image decoder and still fall
+  back to the default background when a format is unavailable.
+
 ## 0.2.1
 
 - Relaxed the AVIF decoder dependency to remain compatible with applications

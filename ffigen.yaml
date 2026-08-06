@@ -1,0 +1,19 @@
+# Run with `dart run ffigen --config ffigen.yaml`.
+name: PluvioraBindings
+description: |
+  Bindings for `src/pluviora.h`.
+
+  Regenerate bindings with `dart run ffigen --config ffigen.yaml`.
+output: 'lib/pluviora_bindings_generated.dart'
+preamble: |
+  /// @nodoc
+  library;
+headers:
+  entry-points:
+    - 'src/pluviora.h'
+  include-directives:
+    - 'src/pluviora.h'
+ffi-native:
+comments:
+  style: any
+  length: full

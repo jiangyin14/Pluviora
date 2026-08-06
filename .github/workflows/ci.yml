@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  native:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build native tests with sanitizers
+        run: >-
+          clang++ -std=c++20 -O1 -g -fsanitize=address,undefined
+          -fno-omit-frame-pointer -Isrc -Isrc/third_party/yyjson
+          test/native/pluviora_core_test.cpp src/pluviora.cpp
+          src/yyjson_bridge.cpp -o /tmp/pluviora_core_test
+      - name: Run native tests
+        run: /tmp/pluviora_core_test test/fixtures/basic.json test/fixtures/basic.js
+
+  flutter:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.41.6
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test --exclude-tags golden
+      - run: dart pub publish --dry-run
+      - name: Build Android release APK
+        working-directory: example
+        run: flutter build apk --release
+
+  ios:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.41.6
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Verify painter golden
+        run: flutter test test/pluviora_golden_test.dart
+      - name: Build unsigned iOS release
+        working-directory: example
+        run: flutter build ios --release --no-codesign

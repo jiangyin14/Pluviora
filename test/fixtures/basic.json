@@ -1,0 +1,26 @@
+{
+  "meta": {
+    "Title": "Fixture",
+    "Composer": "Composer",
+    "Illustrator": "Illustrator",
+    "Beatmapper": "Beatmapper",
+    "Difficulty": "Advanced",
+    "DifficultyValue": 12.5,
+    "AudioFile": "fixture.ogg",
+    "IllustrationFile": "fixture.png"
+  },
+  "bpms": [{"start": 0, "bpm": 120}],
+  "lines": [{
+    "notes": [
+      {"bpm": 0, "startTime": 1, "endTime": 1, "type": 0, "isFake": false, "isAlwaysPerfect": false},
+      {"bpm": 0, "startTime": 2, "endTime": 3, "type": 0, "isFake": false, "isAlwaysPerfect": true}
+    ]
+  }],
+  "storyboardObjects": [
+    {"type": 1, "data": "Fixture text", "layer": 2}
+  ],
+  "animations": [
+    {"bpmId": 0, "fromBeat": 0, "toBeat": 0, "key": 12, "fv": "1", "tv": "1", "data": 0, "i1": 0, "press": 0, "ease": 0, "valueExpression": false, "customEaseExpression": ""},
+    {"bpmId": 0, "fromBeat": 0, "toBeat": 2, "key": 0, "fv": "-400", "tv": "400", "data": 0, "i1": 0, "press": 13, "ease": 2, "valueExpression": false, "customEaseExpression": ""}
+  ]
+}

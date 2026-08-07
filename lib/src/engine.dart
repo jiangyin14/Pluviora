@@ -135,6 +135,17 @@ final class PluvioraEngine {
     }
   }
 
+  /// Synchronizes playback-only state after an explicit timeline seek.
+  void seek(Duration position) {
+    _ensureAlive();
+    _check(
+      native.pluviora_seek(
+        _handle,
+        position.inMicroseconds / Duration.microsecondsPerSecond,
+      ),
+    );
+  }
+
   void setNoteScale(double scale) {
     _ensureAlive();
     _check(native.pluviora_set_note_scale(_handle, scale));

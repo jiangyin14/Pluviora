@@ -100,6 +100,10 @@ PLUVIORA_EXPORT PluvioraStatus pluviora_render(
     double song_length,
     PluvioraFrameView* out_frame);
 
+PLUVIORA_EXPORT PluvioraStatus pluviora_seek(
+    PluvioraHandle handle,
+    double time_seconds);
+
 PLUVIORA_EXPORT PluvioraStatus pluviora_get_metadata(
     PluvioraHandle handle,
     PluvioraMetadataView* out_metadata);

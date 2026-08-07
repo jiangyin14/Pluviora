@@ -64,6 +64,9 @@ external int pluviora_render(
 );
 
 @ffi.Native<PluvioraStatus Function(PluvioraHandle, ffi.Double)>()
+external int pluviora_seek(PluvioraHandle handle, double time_seconds);
+
+@ffi.Native<PluvioraStatus Function(PluvioraHandle, ffi.Double)>()
 external int pluviora_set_flow_speed(PluvioraHandle handle, double speed);
 
 @ffi.Native<

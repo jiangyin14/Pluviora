@@ -60,6 +60,8 @@ final class _PluvioraPlayerState extends State<PluvioraPlayer>
   bool _released = false;
   bool _needsRender = true;
   int _loadToken = 0;
+  PluvioraSource? _scheduledLoadSource;
+  Completer<void>? _scheduledLoadCompleter;
 
   @override
   void initState() {
@@ -68,7 +70,7 @@ final class _PluvioraPlayerState extends State<PluvioraPlayer>
     _engine = PluvioraEngine();
     _ticker = createTicker(_tick);
     _attachController(widget.controller);
-    unawaited(_load(widget.source));
+    unawaited(_loadOutsideBuild(widget.source));
   }
 
   @override
@@ -80,7 +82,7 @@ final class _PluvioraPlayerState extends State<PluvioraPlayer>
       _attachController(widget.controller);
     }
     if (!identical(oldWidget.source, widget.source)) {
-      unawaited(reload(widget.source));
+      unawaited(_loadOutsideBuild(widget.source));
     }
   }
 
@@ -88,6 +90,43 @@ final class _PluvioraPlayerState extends State<PluvioraPlayer>
     _ownsController = value == null;
     _controller = value ?? PluvioraController();
     _controller.attachDelegate(this);
+  }
+
+  Future<void> _loadOutsideBuild(PluvioraSource source) {
+    if (_released) {
+      return Future.error(StateError('PluvioraPlayer has been released.'));
+    }
+    if (SchedulerBinding.instance.schedulerPhase !=
+        SchedulerPhase.persistentCallbacks) {
+      return _load(source);
+    }
+
+    _scheduledLoadSource = source;
+    final pending = _scheduledLoadCompleter;
+    if (pending != null) return pending.future;
+
+    final completer = Completer<void>();
+    _scheduledLoadCompleter = completer;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final scheduledSource = _scheduledLoadSource;
+      if (identical(_scheduledLoadCompleter, completer)) {
+        _scheduledLoadCompleter = null;
+        _scheduledLoadSource = null;
+      }
+      if (!mounted || _released || scheduledSource == null) {
+        if (!completer.isCompleted) completer.complete();
+        return;
+      }
+      try {
+        await _load(scheduledSource);
+        if (!completer.isCompleted) completer.complete();
+      } catch (error, stackTrace) {
+        if (!completer.isCompleted) {
+          completer.completeError(error, stackTrace);
+        }
+      }
+    });
+    return completer.future;
   }
 
   Future<void> _load(PluvioraSource source) async {
@@ -246,6 +285,7 @@ final class _PluvioraPlayerState extends State<PluvioraPlayer>
       microseconds: position.inMicroseconds.clamp(0, _duration.inMicroseconds),
     );
     SoLoud.instance.seek(_musicHandle!, clamped);
+    _engine.seek(clamped);
     _controller.setPosition(clamped);
     _needsRender = true;
   }
@@ -275,7 +315,7 @@ final class _PluvioraPlayerState extends State<PluvioraPlayer>
   @override
   Future<void> reload(PluvioraSource? source) async {
     if (_released) throw StateError('PluvioraPlayer has been released.');
-    await _load(source ?? _source ?? widget.source);
+    await _loadOutsideBuild(source ?? _source ?? widget.source);
   }
 
   @override
@@ -283,6 +323,12 @@ final class _PluvioraPlayerState extends State<PluvioraPlayer>
     if (_released) return;
     _released = true;
     _loadToken++;
+    _scheduledLoadSource = null;
+    final scheduledLoad = _scheduledLoadCompleter;
+    _scheduledLoadCompleter = null;
+    if (scheduledLoad != null && !scheduledLoad.isCompleted) {
+      scheduledLoad.complete();
+    }
     _ticker.stop();
     await _disposeLoadedState();
     _engine.dispose();

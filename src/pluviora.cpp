@@ -816,6 +816,36 @@ struct Chart {
     last_update_time = time;
   }
 
+  void seek(double time) {
+    last_update_time = time;
+    score_animation.reset();
+    combo_scale_animation.reset();
+
+    first_hit_effect_index = 0;
+    while (first_hit_effect_index < hit_effects.size() &&
+           hit_effects[first_hit_effect_index].endTime(kHitDuration) < time) {
+      ++first_hit_effect_index;
+    }
+
+    for (Line& line : lines) {
+      for (Note& note : line.notes) {
+        note.last_update_time = time;
+        note.played_hitsound = note.start <= time;
+      }
+      for (NoteGroup& group : line.note_groups) {
+        group.last_update_time = time;
+        group.first_note_index = 0;
+        while (group.first_note_index < group.indices.size()) {
+          const Note& note = line.notes[group.indices[group.first_note_index]];
+          const bool expired = note.end < time &&
+                               (!note.hold() || note.end + 0.2 <= time);
+          if (!expired) break;
+          ++group.first_note_index;
+        }
+      }
+    }
+  }
+
   void passedHitEffectIndex(uint32_t index) {
     if (first_hit_effect_index == index) ++first_hit_effect_index;
   }
@@ -1723,7 +1753,8 @@ struct Engine {
                (note.floor_end - current_floor) * final_flow * 108.0 * value.flow_speed};
     if (time >= note.start) floor.x = 0.0;
     double alpha = whole_alpha * note_alpha;
-    if (floor.x > visible_area) alpha = 0.0;
+    // VisibleArea is expressed relative to the 1080-unit world viewport.
+    if (floor.x / kWorldHeight > visible_area) alpha = 0.0;
     if (value.has(note.group, 1)) {
       floor.y -= floor.x;
       floor.x = value.get(note.group, 1, time);
@@ -2225,6 +2256,16 @@ PluvioraStatus pluviora_render(PluvioraHandle handle, double time_seconds,
   auto* engine = static_cast<pluviora::Engine*>(handle);
   return pluviora::protect(engine, [&] {
     return engine->render(time_seconds, width, height, song_length, out_frame);
+  });
+}
+
+PluvioraStatus pluviora_seek(PluvioraHandle handle, double time_seconds) {
+  auto* engine = static_cast<pluviora::Engine*>(handle);
+  return pluviora::protect(engine, [&] {
+    if (!engine->chart) return PLUVIORA_NOT_LOADED;
+    if (!std::isfinite(time_seconds)) return PLUVIORA_INVALID_ARGUMENT;
+    engine->chart->seek(time_seconds);
+    return PLUVIORA_OK;
   });
 }
 

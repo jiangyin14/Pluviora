@@ -1,3 +1,12 @@
+## 0.4.1
+
+- Fixed Milthm visible-area unit handling so tap and drag notes remain visible
+  while approaching the judgment line.
+- Synchronized native playback state after explicit seeks to prevent skipped
+  hit sounds from being replayed together on the next frame.
+- Deferred player loads requested during widget builds until after the frame so
+  controller notifications cannot trigger build-phase rebuild assertions.
+
 ## 0.4.0
 
 - Reworked native playback and rendering behavior to follow the licensed

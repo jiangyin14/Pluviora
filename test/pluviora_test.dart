@@ -105,12 +105,32 @@ void main() {
       first.loadBytes(_bytes);
       second.loadBytes(_bytes);
       first.render(
-        position: const Duration(seconds: 3),
+        position: const Duration(milliseconds: 500),
         width: 800,
         height: 600,
       );
+      first.seek(const Duration(milliseconds: 2250));
+      final sought = first.render(
+        position: const Duration(milliseconds: 2250),
+        width: 800,
+        height: 600,
+      );
+      expect(sought.hitCount, 0);
+      first.seek(const Duration(seconds: 1));
+      final exact = first.render(
+        position: const Duration(seconds: 1),
+        width: 800,
+        height: 600,
+      );
+      expect(exact.hitCount, 0);
+      first.seek(const Duration(milliseconds: 250));
       final reversed = first.render(
         position: const Duration(milliseconds: 250),
+        width: 800,
+        height: 600,
+      );
+      final replayed = first.render(
+        position: const Duration(seconds: 1),
         width: 800,
         height: 600,
       );
@@ -120,6 +140,7 @@ void main() {
         height: 720,
       );
       expect(reversed.commandCount, greaterThan(0));
+      expect(replayed.hitCount, 1);
       expect(other.commandCount, greaterThan(0));
       first.dispose();
       first.dispose();

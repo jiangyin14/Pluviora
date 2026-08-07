@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include <cstdint>
+#include <cstring>
 #include <fstream>
 #include <iostream>
 #include <iterator>
@@ -13,6 +14,25 @@ std::vector<uint8_t> readFile(const char* path) {
   std::ifstream stream(path, std::ios::binary);
   if (!stream) throw std::runtime_error(std::string("cannot open ") + path);
   return {std::istreambuf_iterator<char>(stream), std::istreambuf_iterator<char>()};
+}
+
+uint32_t countNotes(const PluvioraFrameView& frame, uint32_t kind) {
+  uint32_t count = 0;
+  size_t offset = 0;
+  while (offset + 8 <= frame.length) {
+    uint16_t type = 0;
+    uint32_t length = 0;
+    std::memcpy(&type, frame.data + offset, sizeof(type));
+    std::memcpy(&length, frame.data + offset + 4, sizeof(length));
+    if (length < 8 || offset + length > frame.length) break;
+    if (type == PLUVIORA_COMMAND_NOTE && length >= 48) {
+      uint32_t note_kind = 0;
+      std::memcpy(&note_kind, frame.data + offset + 40, sizeof(note_kind));
+      if (note_kind == kind) ++count;
+    }
+    offset = (offset + length + 3) & ~size_t{3};
+  }
+  return count;
 }
 
 int main(int argc, char** argv) {
@@ -57,6 +77,14 @@ int main(int argc, char** argv) {
     assert(frame.command_count > 0);
     return frame;
   };
+  const auto approach = render(0.5);
+  assert(approach.hit_count == 0);
+  assert(countNotes(approach, PLUVIORA_NOTE_TAP) == 1);
+  assert(pluviora_seek(engine, 2.25) == PLUVIORA_OK);
+  assert(render(2.25).hit_count == 0);
+  assert(pluviora_seek(engine, 1.0) == PLUVIORA_OK);
+  assert(render(1.0).hit_count == 0);
+  assert(pluviora_seek(engine, 0.5) == PLUVIORA_OK);
   assert(render(0.5).hit_count == 0);
   assert(render(1.0).hit_count == 1);
   assert(render(1.1).hit_count == 0);

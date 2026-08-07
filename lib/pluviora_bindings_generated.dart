@@ -66,23 +66,17 @@ external int pluviora_render(
 @ffi.Native<PluvioraStatus Function(PluvioraHandle, ffi.Double)>()
 external int pluviora_set_flow_speed(PluvioraHandle handle, double speed);
 
+@ffi.Native<
+  PluvioraStatus Function(PluvioraHandle, ffi.Pointer<ffi.Uint8>, ffi.Size)
+>()
+external int pluviora_set_font_data(
+  PluvioraHandle handle,
+  ffi.Pointer<ffi.Uint8> font_data,
+  int font_length,
+);
+
 @ffi.Native<PluvioraStatus Function(PluvioraHandle, ffi.Double)>()
 external int pluviora_set_note_scale(PluvioraHandle handle, double scale);
-
-@ffi.Native<
-  PluvioraStatus Function(
-    PluvioraHandle,
-    ffi.Pointer<ffi.Char>,
-    ffi.Float,
-    ffi.Float,
-  )
->()
-external int pluviora_set_storyboard_asset_size(
-  PluvioraHandle handle,
-  ffi.Pointer<ffi.Char> name,
-  double width,
-  double height,
-);
 
 @ffi.Native<ffi.Pointer<ffi.Char> Function(PluvioraHandle, ffi.Uint32)>()
 external ffi.Pointer<ffi.Char> pluviora_warning_at(
@@ -114,10 +108,11 @@ enum PluvioraCommandType {
   PLUVIORA_COMMAND_QUAD(2),
   PLUVIORA_COMMAND_SPRITE(3),
   PLUVIORA_COMMAND_NOTE(4),
-  PLUVIORA_COMMAND_TEXT(5),
-  PLUVIORA_COMMAND_STORYBOARD_IMAGE(6),
+
+  /// Command values 5 and 6 are reserved by ABI v1.
   PLUVIORA_COMMAND_HIT_RING(7),
-  PLUVIORA_COMMAND_PARTICLE(8);
+  PLUVIORA_COMMAND_PARTICLE(8),
+  PLUVIORA_COMMAND_TEXT_BITMAP(9);
 
   final int value;
   const PluvioraCommandType(this.value);
@@ -127,10 +122,9 @@ enum PluvioraCommandType {
     2 => PLUVIORA_COMMAND_QUAD,
     3 => PLUVIORA_COMMAND_SPRITE,
     4 => PLUVIORA_COMMAND_NOTE,
-    5 => PLUVIORA_COMMAND_TEXT,
-    6 => PLUVIORA_COMMAND_STORYBOARD_IMAGE,
     7 => PLUVIORA_COMMAND_HIT_RING,
     8 => PLUVIORA_COMMAND_PARTICLE,
+    9 => PLUVIORA_COMMAND_TEXT_BITMAP,
     _ => throw ArgumentError('Unknown value for PluvioraCommandType: $value'),
   };
 }
@@ -285,41 +279,3 @@ enum PluvioraSpriteKind {
 
 typedef PluvioraStatus = ffi.Uint32;
 typedef DartPluvioraStatus = int;
-
-enum PluvioraStoryboardBuiltin {
-  PLUVIORA_STORYBOARD_CUSTOM(0),
-  PLUVIORA_STORYBOARD_LINE(1),
-  PLUVIORA_STORYBOARD_RECT(2),
-  PLUVIORA_STORYBOARD_ROUND_RECT(3),
-  PLUVIORA_STORYBOARD_LINE_HEAD(4),
-  PLUVIORA_STORYBOARD_LINE_VERTICAL(5),
-  PLUVIORA_STORYBOARD_TAP(16),
-  PLUVIORA_STORYBOARD_HOLD(17),
-  PLUVIORA_STORYBOARD_DRAG(18),
-  PLUVIORA_STORYBOARD_FRACTURE(19),
-  PLUVIORA_STORYBOARD_TAP_DOUBLE(20),
-  PLUVIORA_STORYBOARD_FRACTURE_DOUBLE(21),
-  PLUVIORA_STORYBOARD_EXHOLD(22);
-
-  final int value;
-  const PluvioraStoryboardBuiltin(this.value);
-
-  static PluvioraStoryboardBuiltin fromValue(int value) => switch (value) {
-    0 => PLUVIORA_STORYBOARD_CUSTOM,
-    1 => PLUVIORA_STORYBOARD_LINE,
-    2 => PLUVIORA_STORYBOARD_RECT,
-    3 => PLUVIORA_STORYBOARD_ROUND_RECT,
-    4 => PLUVIORA_STORYBOARD_LINE_HEAD,
-    5 => PLUVIORA_STORYBOARD_LINE_VERTICAL,
-    16 => PLUVIORA_STORYBOARD_TAP,
-    17 => PLUVIORA_STORYBOARD_HOLD,
-    18 => PLUVIORA_STORYBOARD_DRAG,
-    19 => PLUVIORA_STORYBOARD_FRACTURE,
-    20 => PLUVIORA_STORYBOARD_TAP_DOUBLE,
-    21 => PLUVIORA_STORYBOARD_FRACTURE_DOUBLE,
-    22 => PLUVIORA_STORYBOARD_EXHOLD,
-    _ => throw ArgumentError(
-      'Unknown value for PluvioraStoryboardBuiltin: $value',
-    ),
-  };
-}

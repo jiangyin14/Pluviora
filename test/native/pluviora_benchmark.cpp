@@ -16,13 +16,19 @@ std::vector<uint8_t> readFile(const char* path) {
 }
 
 int main(int argc, char** argv) {
-  if (argc != 3) {
-    std::cerr << "usage: pluviora_benchmark chart.json chart.js\n";
+  if (argc != 4) {
+    std::cerr << "usage: pluviora_benchmark chart.json chart.js font.ttf\n";
     return 2;
   }
   const auto json = readFile(argv[1]);
   const auto js = readFile(argv[2]);
+  const auto font = readFile(argv[3]);
   PluvioraHandle engine = pluviora_create();
+  if (pluviora_set_font_data(engine, font.data(), font.size()) !=
+      PLUVIORA_OK) {
+    std::cerr << pluviora_last_error(engine) << '\n';
+    return 1;
+  }
   if (pluviora_load(engine, json.data(), json.size(), js.data(), js.size()) !=
       PLUVIORA_OK) {
     std::cerr << pluviora_last_error(engine) << '\n';

@@ -6,9 +6,9 @@
 | --- | --- |
 | `PluvioraAsset` | A path-backed or memory-backed input |
 | `PluvioraSource` | Document, audio, and optional companion resources |
-| `PluvioraPlayer` | A self-contained preview Widget |
+| `PluvioraPlayer` | A self-contained preview widget |
 | `PluvioraController` | Playback control and observable state |
-| `PluvioraEngine` | Low-level native engine without audio or Widgets |
+| `PluvioraEngine` | Low-level native engine without audio or widgets |
 | `PluvioraLoadResult` | Metadata and non-fatal warnings |
 | `PluvioraFrameView` | A zero-copy native drawing-command view |
 
@@ -20,14 +20,15 @@ PluvioraSource.files(
   audio: '/path/to/audio.ogg',
   orderingScript: '/path/to/ordering.js',
   background: '/path/to/background.avif',
-  overlayAssets: {
-    'overlay.png': '/path/to/overlay.png',
-  },
 )
 ```
 
-The optional companion script is treated as untrusted text and never executed.
-The required JSON root fields and a minimal valid example are documented in the
+`document` and `audio` are required. The optional companion script is treated
+as untrusted text and never executed; only literal `n(<line>, ...)` ordering
+hints are scanned. `background` is decoded by Flutter or `flutter_avif` and is
+independent of metadata asset names.
+
+The required JSON fields and a minimal valid example are documented in the
 [quick start](quick_start.md#supported-document-structure).
 
 ## Player
@@ -42,7 +43,7 @@ The required JSON root fields and a minimal valid example are documented in the
 | `onLoaded` | `null` | Metadata and warning callback |
 
 Playback drives `CustomPainter` repaint notifications without rebuilding the
-Widget tree for every frame.
+widget tree for every frame. The audio playback position is the frame clock.
 
 ## Controller
 
@@ -62,7 +63,8 @@ await controller.reload(source);
 await controller.release();
 ```
 
-One controller can be attached to one player at a time.
+One controller can be attached to one player at a time. Dispose a controller
+that your application created after the player is no longer used.
 
 ## Engine
 
@@ -82,12 +84,29 @@ try {
 }
 ```
 
+`load(source)` initializes bundled native resources automatically. When using
+the synchronous byte API directly, initialize first:
+
+```dart
+final engine = PluvioraEngine();
+await engine.initialize();
+final result = engine.loadBytes(documentBytes, orderingScript: scriptBytes);
+```
+
 Each engine owns an independent C++ instance. `PluvioraFrameView.bytes`
 remains valid only until the next `render`, `load`, or `dispose` call on that
 engine. Copy it when longer ownership is required.
 
 ## Errors and warnings
 
-Malformed documents, ABI mismatches, and invalid native calls throw
-`PluvioraException`. Missing optional images and decode failures are reported
-as `PluvioraWarning` values so playback can continue.
+Malformed documents, ABI mismatches, invalid native calls, and missing required
+inputs throw `PluvioraException` or the underlying Dart I/O exception.
+
+Successful loads can still report warnings for recoverable compatibility cases:
+
+- the ordering hints were absent or incomplete, so JSON traversal order was
+  used for note indices;
+- a BPM reference was resolved by numeric BPM matching;
+- several BPM entries matched and the first was selected;
+- animations without a non-null `i1` target were skipped;
+- an optional background failed to decode and the fallback was used.

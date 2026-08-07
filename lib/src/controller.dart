@@ -49,7 +49,7 @@ final class PluvioraController extends ChangeNotifier {
 
   Future<void> setPlaybackRate(double rate) async {
     if (!rate.isFinite || rate <= 0) {
-      throw ArgumentError.value(rate, 'rate', '必须大于 0');
+      throw ArgumentError.value(rate, 'rate', 'Must be greater than zero.');
     }
     _playbackRate = rate;
     await _requireDelegate().setPlaybackRate(rate);
@@ -70,7 +70,7 @@ final class PluvioraController extends ChangeNotifier {
 
   Future<void> setNoteScale(double scale) async {
     if (!scale.isFinite || scale <= 0) {
-      throw ArgumentError.value(scale, 'scale', '必须大于 0');
+      throw ArgumentError.value(scale, 'scale', 'Must be greater than zero.');
     }
     _noteScale = scale;
     await _requireDelegate().setNoteScale(scale);
@@ -84,9 +84,11 @@ final class PluvioraController extends ChangeNotifier {
 
   @internal
   void attachDelegate(PluvioraControllerDelegate delegate) {
-    if (_disposed) throw StateError('PluvioraController 已释放。');
+    if (_disposed) throw StateError('PluvioraController has been disposed.');
     if (_delegate != null && !identical(_delegate, delegate)) {
-      throw StateError('一个 PluvioraController 不能同时控制多个播放器。');
+      throw StateError(
+        'A PluvioraController cannot control multiple players at once.',
+      );
     }
     _delegate = delegate;
   }
@@ -140,8 +142,9 @@ final class PluvioraController extends ChangeNotifier {
   }
 
   PluvioraControllerDelegate _requireDelegate() {
-    if (_disposed) throw StateError('PluvioraController 已释放。');
-    return _delegate ?? (throw StateError('PluvioraController 尚未连接到播放器。'));
+    if (_disposed) throw StateError('PluvioraController has been disposed.');
+    return _delegate ??
+        (throw StateError('PluvioraController is not attached to a player.'));
   }
 
   void _notify() {

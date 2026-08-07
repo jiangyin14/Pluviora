@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
@@ -23,49 +22,65 @@ final class PluvioraFrameNotifier extends ChangeNotifier {
   }
 }
 
+final class _TextBitmapMesh {
+  _TextBitmapMesh(this.positions, this.coverages)
+    : colors = Int32List(coverages.length * 6);
+
+  final Float32List positions;
+  final Uint8List coverages;
+  final Int32List colors;
+  int? _rgba;
+
+  void applyColor(int rgba) {
+    if (_rgba == rgba) return;
+    _rgba = rgba;
+    final red = (rgba >> 24) & 0xff;
+    final green = (rgba >> 16) & 0xff;
+    final blue = (rgba >> 8) & 0xff;
+    final baseAlpha = rgba & 0xff;
+    for (var run = 0; run < coverages.length; run++) {
+      final alpha = (baseAlpha * coverages[run] / 255).round();
+      final color = ((alpha << 24) | (red << 16) | (green << 8) | blue)
+          .toSigned(32);
+      colors.fillRange(run * 6, run * 6 + 6, color);
+    }
+  }
+}
+
 final class PluvioraPainter extends CustomPainter {
   PluvioraPainter(this.frames) : super(repaint: frames);
 
   final PluvioraFrameNotifier frames;
-  Float32List _atlasTransforms = Float32List(256);
-  Float32List _atlasRects = Float32List(256);
-  Int32List _atlasColors = Int32List(64);
   final Float32List _quadPositions = Float32List(8);
-  final Float32List _quadTextures = Float32List(8);
   final Int32List _quadColors = Int32List(4);
-  final Float64List _identity = Float64List.fromList(const [
-    1,
-    0,
-    0,
-    0,
-    0,
-    1,
-    0,
-    0,
-    0,
-    0,
-    1,
-    0,
-    0,
-    0,
-    0,
-    1,
-  ]);
-  final Map<String, TextPainter> _textCache = {};
-
-  static const Map<String, ui.Rect> _atlas = {
-    'line_head': ui.Rect.fromLTWH(0, 0, 192, 192),
-    'pause': ui.Rect.fromLTWH(192, 0, 128, 128),
-    'drag': ui.Rect.fromLTWH(320, 0, 192, 192),
-    'tap': ui.Rect.fromLTWH(512, 0, 192, 192),
-    'tap_double': ui.Rect.fromLTWH(704, 0, 192, 192),
-    'extap': ui.Rect.fromLTWH(896, 0, 192, 192),
-    'extap_double': ui.Rect.fromLTWH(1088, 0, 192, 192),
-    'hold': ui.Rect.fromLTWH(0, 256, 576, 192),
-    'hold_double': ui.Rect.fromLTWH(576, 256, 576, 192),
-    'exhold': ui.Rect.fromLTWH(1152, 256, 576, 192),
-    'exhold_double': ui.Rect.fromLTWH(0, 448, 576, 192),
-  };
+  final Map<String, _TextBitmapMesh> _textBitmapCache = {};
+  static final List<double> _backgroundMaskStops = List.generate(
+    128,
+    (index) => index / 127,
+    growable: false,
+  );
+  static final List<ui.Color> _backgroundMaskColors = List.generate(128, (
+    index,
+  ) {
+    final normalized = index / 127 * 1.2 - 0.2;
+    final alpha = normalized <= 0
+        ? 0
+        : (math.pow(normalized, 0.8) * 270).toInt().clamp(0, 255);
+    return ui.Color.fromARGB(alpha, 0, 0, 0);
+  }, growable: false);
+  static final List<double> _progressStops = List.generate(
+    128,
+    (index) => index / 127,
+    growable: false,
+  );
+  static final List<ui.Color> _progressColors = List.generate(128, (index) {
+    final progress = index / 127;
+    final alpha = ((1 - math.pow(1 - progress, 2.2)) * 255).toInt().clamp(
+      0,
+      255,
+    );
+    return ui.Color.fromARGB(alpha, 255, 255, 255);
+  }, growable: false);
 
   @override
   void paint(ui.Canvas canvas, ui.Size size) {
@@ -99,22 +114,6 @@ final class PluvioraPainter extends CustomPainter {
     PluvioraPainterResources resources,
   ) {
     var offset = start;
-    var atlasCount = 0;
-
-    void flushAtlas() {
-      if (atlasCount == 0) return;
-      canvas.drawRawAtlas(
-        resources.atlas,
-        Float32List.sublistView(_atlasTransforms, 0, atlasCount * 4),
-        Float32List.sublistView(_atlasRects, 0, atlasCount * 4),
-        Int32List.sublistView(_atlasColors, 0, atlasCount),
-        ui.BlendMode.modulate,
-        null,
-        ui.Paint()..filterQuality = ui.FilterQuality.medium,
-      );
-      atlasCount = 0;
-    }
-
     while (offset + 8 <= data.lengthInBytes &&
         data.getUint16(offset, Endian.little) == 4) {
       final length = data.getUint32(offset + 4, Endian.little);
@@ -131,47 +130,65 @@ final class PluvioraPainter extends CustomPainter {
       final kind = data.getUint32(payload + 32, Endian.little);
       final flags = data.getUint32(payload + 36, Endian.little);
       final name = _noteSprite(kind, flags);
-      final source = _atlas[name]!;
-      if (kind == 1) {
-        flushAtlas();
-        canvas.save();
-        canvas.translate(x, y);
-        canvas.rotate(rotation);
-        canvas.drawImageRect(
-          resources.atlas,
-          source,
-          ui.Rect.fromLTWH(-head, -width / 2, head + body + tail, width),
-          ui.Paint()
-            ..filterQuality = ui.FilterQuality.medium
-            ..colorFilter = ui.ColorFilter.mode(
-              _color(rgba),
-              ui.BlendMode.modulate,
-            ),
+      final image = resources.notes[name]!;
+      final cutPadding = kind == 1 ? 668.0 : image.width / 2.0;
+      final imageWidth = image.width.toDouble();
+      final imageHeight = image.height.toDouble();
+      final paint = ui.Paint()
+        ..filterQuality = ui.FilterQuality.medium
+        ..colorFilter = ui.ColorFilter.mode(
+          _color(rgba),
+          ui.BlendMode.modulate,
         );
-        canvas.restore();
-      } else {
-        _ensureAtlasCapacity(atlasCount + 1);
-        final scale = width / source.width;
-        final cosine = math.cos(rotation) * scale;
-        final sine = math.sin(rotation) * scale;
-        final transform = atlasCount * 4;
-        _atlasTransforms[transform] = cosine;
-        _atlasTransforms[transform + 1] = sine;
-        _atlasTransforms[transform + 2] =
-            x - cosine * source.center.dx + sine * source.center.dy;
-        _atlasTransforms[transform + 3] =
-            y - sine * source.center.dx - cosine * source.center.dy;
-        _atlasRects[transform] = source.left;
-        _atlasRects[transform + 1] = source.top;
-        _atlasRects[transform + 2] = source.right;
-        _atlasRects[transform + 3] = source.bottom;
-        _atlasColors[atlasCount] = _argb(rgba).toSigned(32);
-        atlasCount++;
-      }
+      canvas.save();
+      canvas.translate(x, y);
+      canvas.rotate(rotation);
+      _drawImageSlice(
+        canvas,
+        image,
+        ui.Rect.fromLTWH(0, 0, cutPadding, imageHeight),
+        ui.Rect.fromLTWH(-head, -width / 2, head, width),
+        paint,
+      );
+      _drawImageSlice(
+        canvas,
+        image,
+        ui.Rect.fromLTWH(
+          cutPadding,
+          0,
+          imageWidth - cutPadding * 2,
+          imageHeight,
+        ),
+        ui.Rect.fromLTWH(0, -width / 2, body, width),
+        paint,
+      );
+      _drawImageSlice(
+        canvas,
+        image,
+        ui.Rect.fromLTWH(imageWidth - cutPadding, 0, cutPadding, imageHeight),
+        ui.Rect.fromLTWH(body, -width / 2, tail, width),
+        paint,
+      );
+      canvas.restore();
       offset = _aligned(offset + length);
     }
-    flushAtlas();
     return offset;
+  }
+
+  static void _drawImageSlice(
+    ui.Canvas canvas,
+    ui.Image image,
+    ui.Rect source,
+    ui.Rect destination,
+    ui.Paint paint,
+  ) {
+    if (source.width <= 0 ||
+        source.height <= 0 ||
+        destination.width == 0 ||
+        destination.height == 0) {
+      return;
+    }
+    canvas.drawImageRect(image, source, destination, paint);
   }
 
   void _drawCommand(
@@ -182,6 +199,7 @@ final class PluvioraPainter extends CustomPainter {
     PluvioraPainterResources resources,
   ) {
     final payload = offset + 8;
+    final flags = data.getUint16(offset + 2, Endian.little);
     switch (type) {
       case 1:
         final x = _f(data, payload);
@@ -192,28 +210,35 @@ final class PluvioraPainter extends CustomPainter {
         canvas.save();
         canvas.translate(x, y);
         canvas.rotate(rotation);
+        final rect = ui.Rect.fromCenter(
+          center: ui.Offset.zero,
+          width: width,
+          height: height,
+        );
         canvas.drawRect(
-          ui.Rect.fromCenter(
-            center: ui.Offset.zero,
-            width: width,
-            height: height,
-          ),
-          ui.Paint()
-            ..color = _color(data.getUint32(payload + 20, Endian.little)),
+          rect,
+          flags & 1 == 0
+              ? (ui.Paint()
+                  ..color = _color(data.getUint32(payload + 20, Endian.little)))
+              : (ui.Paint()
+                  ..shader = ui.Gradient.linear(
+                    rect.centerLeft,
+                    rect.centerRight,
+                    _progressColors,
+                    _progressStops,
+                  )),
         );
         canvas.restore();
       case 2:
         _drawQuad(canvas, data, payload);
       case 3:
         _drawSprite(canvas, data, payload, resources);
-      case 5:
-        _drawText(canvas, data, offset, payload);
-      case 6:
-        _drawStoryboardImage(canvas, data, offset, payload, resources);
       case 7:
         _drawHitRing(canvas, data, payload, resources);
       case 8:
         _drawParticle(canvas, data, payload);
+      case 9:
+        _drawTextBitmap(canvas, data, payload);
     }
   }
 
@@ -249,13 +274,13 @@ final class PluvioraPainter extends CustomPainter {
     final rotation = _f(data, payload + 16) * math.pi / 180;
     final color = _color(data.getUint32(payload + 20, Endian.little));
     final kind = data.getUint32(payload + 24, Endian.little);
-    final source = _atlas[kind == 0 ? 'line_head' : 'pause']!;
+    final image = kind == 0 ? resources.trackAnchor : resources.pause;
     canvas.save();
     canvas.translate(x, y);
     canvas.rotate(rotation);
     canvas.drawImageRect(
-      resources.atlas,
-      source,
+      image,
+      ui.Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
       ui.Rect.fromCenter(center: ui.Offset.zero, width: width, height: height),
       ui.Paint()
         ..filterQuality = ui.FilterQuality.medium
@@ -264,139 +289,71 @@ final class PluvioraPainter extends CustomPainter {
     canvas.restore();
   }
 
-  void _drawText(ui.Canvas canvas, ByteData data, int command, int payload) {
+  void _drawTextBitmap(ui.Canvas canvas, ByteData data, int payload) {
     final x = _f(data, payload);
     final y = _f(data, payload + 4);
-    final size = _f(data, payload + 8);
-    final rotation = _f(data, payload + 12) * math.pi / 180;
-    final scaleX = _f(data, payload + 16);
-    final scaleY = _f(data, payload + 20);
-    final anchorX = _f(data, payload + 24);
-    final anchorY = _f(data, payload + 28);
-    final rgba = data.getUint32(payload + 32, Endian.little);
-    final textLength = data.getUint32(payload + 36, Endian.little);
-    final textStart = payload + 40;
-    final text = utf8.decode(
-      data.buffer.asUint8List(data.offsetInBytes + textStart, textLength),
-      allowMalformed: true,
-    );
-    final cacheKey = '$text\u0000$size\u0000$rgba';
-    if (!_textCache.containsKey(cacheKey) && _textCache.length >= 256) {
-      _textCache.clear();
+    final rotation = _f(data, payload + 8) * math.pi / 180;
+    final pixelScaleX = _f(data, payload + 12);
+    final pixelScaleY = _f(data, payload + 16);
+    final anchorX = _f(data, payload + 20);
+    final anchorY = _f(data, payload + 24);
+    final rgba = data.getUint32(payload + 28, Endian.little);
+    final bitmapWidth = data.getUint32(payload + 32, Endian.little);
+    final bitmapHeight = data.getUint32(payload + 36, Endian.little);
+    final runCount = data.getUint32(payload + 40, Endian.little);
+    final keyLow = data.getUint32(payload + 44, Endian.little);
+    final keyHigh = data.getUint32(payload + 48, Endian.little);
+    final cacheKey = '$keyHigh:$keyLow:$bitmapWidth:$bitmapHeight:$runCount';
+    var mesh = _textBitmapCache[cacheKey];
+    if (mesh == null) {
+      if (_textBitmapCache.length >= 128) {
+        _textBitmapCache.remove(_textBitmapCache.keys.first);
+      }
+      final positions = Float32List(runCount * 12);
+      final coverages = Uint8List(runCount);
+      var runOffset = payload + 52;
+      for (var run = 0; run < runCount; run++) {
+        final left = data.getUint32(runOffset, Endian.little).toDouble();
+        final top = data.getUint32(runOffset + 4, Endian.little).toDouble();
+        final right =
+            left + data.getUint32(runOffset + 8, Endian.little).toDouble();
+        final bottom = top + 1;
+        coverages[run] = data.getUint32(runOffset + 12, Endian.little);
+        final vertex = run * 12;
+        positions
+          ..[vertex] = left
+          ..[vertex + 1] = top
+          ..[vertex + 2] = right
+          ..[vertex + 3] = top
+          ..[vertex + 4] = right
+          ..[vertex + 5] = bottom
+          ..[vertex + 6] = left
+          ..[vertex + 7] = top
+          ..[vertex + 8] = right
+          ..[vertex + 9] = bottom
+          ..[vertex + 10] = left
+          ..[vertex + 11] = bottom;
+        runOffset += 16;
+      }
+      mesh = _TextBitmapMesh(positions, coverages);
+      _textBitmapCache[cacheKey] = mesh;
     }
-    final painter = _textCache.putIfAbsent(cacheKey, () {
-      final value = TextPainter(
-        text: TextSpan(
-          text: text,
-          style: TextStyle(
-            color: _color(rgba),
-            package: 'pluviora',
-            fontSize: size,
-          ),
-        ),
-        textDirection: TextDirection.ltr,
-        maxLines: 1,
-      )..layout();
-      return value;
-    });
+    mesh.applyColor(rgba);
     canvas.save();
     canvas.translate(x, y);
     canvas.rotate(rotation);
-    canvas.scale(scaleX, scaleY);
-    painter.paint(
-      canvas,
-      ui.Offset(-painter.width * anchorX, -painter.height * anchorY),
+    canvas.scale(pixelScaleX, pixelScaleY);
+    canvas.translate(-bitmapWidth * anchorX, -bitmapHeight * anchorY);
+    canvas.drawVertices(
+      ui.Vertices.raw(
+        ui.VertexMode.triangles,
+        mesh.positions,
+        colors: mesh.colors,
+      ),
+      ui.BlendMode.srcOver,
+      ui.Paint()..isAntiAlias = false,
     );
     canvas.restore();
-  }
-
-  void _drawStoryboardImage(
-    ui.Canvas canvas,
-    ByteData data,
-    int command,
-    int payload,
-    PluvioraPainterResources resources,
-  ) {
-    for (var index = 0; index < 8; index++) {
-      _quadPositions[index] = _f(data, payload + index * 4);
-    }
-    final rgba = data.getUint32(payload + 32, Endian.little);
-    final builtin = data.getUint32(payload + 36, Endian.little);
-    final nameLength = data.getUint32(payload + 40, Endian.little);
-    final nameStart = payload + 44;
-    final name = utf8.decode(
-      data.buffer.asUint8List(data.offsetInBytes + nameStart, nameLength),
-      allowMalformed: true,
-    );
-    if (builtin == 1 || builtin == 2 || builtin == 3 || builtin == 5) {
-      final color = _argb(rgba).toSigned(32);
-      _quadColors.fillRange(0, 4, color);
-      canvas.drawVertices(
-        ui.Vertices.raw(
-          ui.VertexMode.triangleFan,
-          _quadPositions,
-          colors: _quadColors,
-        ),
-        ui.BlendMode.srcOver,
-        ui.Paint(),
-      );
-      return;
-    }
-    ui.Image? image;
-    ui.Rect? source;
-    if (builtin == 4) {
-      image = resources.atlas;
-      source = _atlas['line_head'];
-    } else if (builtin >= 16 && builtin <= 22) {
-      image = resources.atlas;
-      source =
-          _atlas[switch (builtin) {
-            16 => 'tap',
-            17 => 'hold',
-            18 => 'drag',
-            19 => 'extap',
-            20 => 'tap_double',
-            21 => 'extap_double',
-            _ => 'exhold',
-          }];
-    } else {
-      image = resources.storyboards[name];
-    }
-    if (image == null) return;
-    source ??= ui.Rect.fromLTWH(
-      0,
-      0,
-      image.width.toDouble(),
-      image.height.toDouble(),
-    );
-    _quadTextures
-      ..[0] = source.left
-      ..[1] = source.top
-      ..[2] = source.right
-      ..[3] = source.top
-      ..[4] = source.right
-      ..[5] = source.bottom
-      ..[6] = source.left
-      ..[7] = source.bottom;
-    final color = _argb(rgba).toSigned(32);
-    _quadColors.fillRange(0, 4, color);
-    final vertices = ui.Vertices.raw(
-      ui.VertexMode.triangleFan,
-      _quadPositions,
-      colors: _quadColors,
-      textureCoordinates: _quadTextures,
-    );
-    canvas.drawVertices(
-      vertices,
-      ui.BlendMode.modulate,
-      ui.Paint()
-        ..shader = ui.ImageShader(
-          image,
-          ui.TileMode.clamp,
-          ui.TileMode.clamp,
-          _identity,
-        ),
-    );
   }
 
   void _drawHitRing(
@@ -410,11 +367,13 @@ final class PluvioraPainter extends CustomPainter {
     final size = _f(data, payload + 8);
     final progress = _f(data, payload + 12);
     final rotation = _f(data, payload + 16) * math.pi / 180;
-    final color = _color(data.getUint32(payload + 20, Endian.little));
+    final seed = _f(data, payload + 20);
+    final color = _color(data.getUint32(payload + 24, Endian.little));
     final rect = ui.Rect.fromLTWH(0, 0, size, size);
     canvas.save();
-    canvas.translate(x - size / 2, y - size / 2);
+    canvas.translate(x, y);
     canvas.rotate(rotation);
+    canvas.translate(-size / 2, -size / 2);
     final shader = resources.hitRingShader;
     if (shader == null) {
       canvas.drawCircle(
@@ -426,14 +385,16 @@ final class PluvioraPainter extends CustomPainter {
           ..color = color.withValues(alpha: color.a * (1 - progress)),
       );
     } else {
+      final textureIndex = (progress * 60).floor().clamp(0, 59);
       shader
         ..setFloat(0, size)
         ..setFloat(1, size)
-        ..setFloat(2, progress)
-        ..setFloat(3, color.r)
-        ..setFloat(4, color.g)
-        ..setFloat(5, color.b)
-        ..setFloat(6, color.a);
+        ..setFloat(2, textureIndex / 59)
+        ..setFloat(3, seed)
+        ..setFloat(4, color.r)
+        ..setFloat(5, color.g)
+        ..setFloat(6, color.b)
+        ..setFloat(7, color.a);
       canvas.drawRect(rect, ui.Paint()..shader = shader);
     }
     canvas.restore();
@@ -460,16 +421,36 @@ final class PluvioraPainter extends CustomPainter {
   }
 
   void _drawBackground(ui.Canvas canvas, ui.Size size, ui.Image? image) {
+    late final ui.Rect destination;
     if (image == null) {
       _drawDefaultBackground(canvas, size);
-      return;
+      destination = ui.Offset.zero & size;
+    } else {
+      final sourceSize = ui.Size(
+        image.width.toDouble(),
+        image.height.toDouble(),
+      );
+      final fitted = applyBoxFit(BoxFit.cover, sourceSize, size);
+      destination = Alignment.center.inscribe(
+        fitted.destination,
+        ui.Offset.zero & size,
+      );
+      canvas.drawImageRect(
+        image,
+        ui.Offset.zero & sourceSize,
+        destination,
+        ui.Paint()..filterQuality = ui.FilterQuality.medium,
+      );
     }
-    paintImage(
-      canvas: canvas,
-      rect: ui.Offset.zero & size,
-      image: image,
-      fit: BoxFit.cover,
-      filterQuality: ui.FilterQuality.medium,
+    canvas.drawRect(
+      destination,
+      ui.Paint()
+        ..shader = ui.Gradient.linear(
+          destination.topCenter,
+          destination.bottomCenter,
+          _backgroundMaskColors,
+          _backgroundMaskStops,
+        ),
     );
   }
 
@@ -483,17 +464,6 @@ final class PluvioraPainter extends CustomPainter {
           const [ui.Color(0xff091124), ui.Color(0xff1e3151)],
         ),
     );
-  }
-
-  void _ensureAtlasCapacity(int count) {
-    if (_atlasColors.length >= count) return;
-    var capacity = _atlasColors.length;
-    while (capacity < count) {
-      capacity *= 2;
-    }
-    _atlasTransforms = Float32List(capacity * 4);
-    _atlasRects = Float32List(capacity * 4);
-    _atlasColors = Int32List(capacity);
   }
 
   static String _noteSprite(int kind, int flags) {

@@ -21,6 +21,8 @@
   ],
   "animations": [
     {"bpmId": 0, "fromBeat": 0, "toBeat": 0, "key": 12, "fv": "1", "tv": "1", "data": 0, "i1": 0, "press": 0, "ease": 0, "valueExpression": false, "customEaseExpression": ""},
-    {"bpmId": 0, "fromBeat": 0, "toBeat": 2, "key": 0, "fv": "-400", "tv": "400", "data": 0, "i1": 0, "press": 13, "ease": 2, "valueExpression": false, "customEaseExpression": ""}
+    {"bpmId": 0, "fromBeat": 0, "toBeat": 2, "key": 0, "fv": "-400", "tv": "400", "data": 0, "i1": 0, "press": 13, "ease": 2, "valueExpression": false, "customEaseExpression": ""},
+    {},
+    {"i1": null}
   ]
 }

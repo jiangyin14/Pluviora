@@ -31,7 +31,6 @@ final class PluvioraSource {
     required this.audio,
     this.orderingScript,
     this.background,
-    this.overlayAssets = const {},
   });
 
   factory PluvioraSource.files({
@@ -39,7 +38,6 @@ final class PluvioraSource {
     required String audio,
     String? orderingScript,
     String? background,
-    Map<String, String> overlayAssets = const {},
   }) => PluvioraSource(
     document: PluvioraAsset.file(document),
     audio: PluvioraAsset.file(audio),
@@ -47,14 +45,10 @@ final class PluvioraSource {
         ? null
         : PluvioraAsset.file(orderingScript),
     background: background == null ? null : PluvioraAsset.file(background),
-    overlayAssets: overlayAssets.map(
-      (name, path) => MapEntry(name, PluvioraAsset.file(path, name: name)),
-    ),
   );
 
   final PluvioraAsset document;
   final PluvioraAsset audio;
   final PluvioraAsset? orderingScript;
   final PluvioraAsset? background;
-  final Map<String, PluvioraAsset> overlayAssets;
 }

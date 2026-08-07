@@ -16,7 +16,9 @@ jobs:
           test/native/pluviora_core_test.cpp src/pluviora.cpp
           src/yyjson_bridge.cpp -o /tmp/pluviora_core_test
       - name: Run native tests
-        run: /tmp/pluviora_core_test test/fixtures/basic.json test/fixtures/basic.js
+        run: >-
+          /tmp/pluviora_core_test test/fixtures/basic.json test/fixtures/basic.js
+          files/resources/runtime/font.ttf
 
   flutter:
     runs-on: ubuntu-latest

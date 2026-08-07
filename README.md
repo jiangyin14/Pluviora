@@ -5,9 +5,9 @@ A Flutter Cross-Platform Library for Special File Previewing
 [![CI](https://github.com/jiangyin14/Pluviora/actions/workflows/ci.yml/badge.svg)](https://github.com/jiangyin14/Pluviora/actions/workflows/ci.yml)
 
 Pluviora combines an independent C++20 parsing and frame-generation core with
-Flutter audio, image decoding, and Canvas rendering. It is designed for apps
-that need deterministic, high-performance previews of supported JSON documents
-with synchronized audio and optional companion resources.
+Flutter audio, image decoding, and Canvas rendering. It is intended for mobile
+apps that need high-performance previews of the supported JSON format with a
+synchronized audio track and optional companion inputs.
 
 Documentation: [Quick start](https://github.com/jiangyin14/Pluviora/blob/main/doc/quick_start.md) ·
 [API guide](https://github.com/jiangyin14/Pluviora/blob/main/doc/api.md) ·
@@ -20,27 +20,22 @@ Documentation: [Quick start](https://github.com/jiangyin14/Pluviora/blob/main/do
 - Native-owned, dynamically sized drawing-command buffers.
 - Audio-position master clock with play, pause, seek, rate, and volume control.
 - File-backed or memory-backed JSON and audio inputs.
-- Optional static ordering hints, backgrounds, and named overlay images.
-- Deterministic effects and neutral assets generated inside this repository.
+- Optional static `n(...)` ordering hints and AVIF/PNG/JPEG/WebP backgrounds.
+- Bundled full-resolution runtime textures, font, and sound effects.
+- Native `stb_truetype` text rasterization and a Flutter fragment-shader hit
+  effect.
 
 ## Requirements
 
 - Flutter 3.38+
 - Dart 3.10.8+
-- Android API 24+
+- Android and iOS projects supported by the selected Flutter release
 - iOS 13+
 
 ## Installation
 
 ```bash
 flutter pub add pluviora
-```
-
-Or add the package directly to `pubspec.yaml`:
-
-```yaml
-dependencies:
-  pluviora: ^0.2.0
 ```
 
 ## Quick start
@@ -55,16 +50,17 @@ final source = PluvioraSource.files(
   audio: '/path/to/audio.ogg',
   orderingScript: '/path/to/ordering.js',
   background: '/path/to/background.avif',
-  overlayAssets: {
-    'overlay.png': '/path/to/overlay.png',
-  },
 );
 
 PluvioraPlayer(
   source: source,
   controller: controller,
   autoplay: true,
-  onLoaded: (result) => print('Loaded ${result.metadata.title}'),
+  onLoaded: (result) {
+    for (final warning in result.warnings) {
+      print(warning);
+    }
+  },
 );
 ```
 
@@ -83,13 +79,23 @@ await controller.play();
 
 Dispose controllers created by your application.
 
-## Input model
+## Input behavior
 
 The package accepts a supported JSON preview document and an audio file. An
-optional JavaScript companion may provide static ordering hints; it is scanned
-as text and is never executed. Background and named overlay images are
-optional. The core package only accepts paths or bytes, while file selection is
-kept in the example app.
+optional JavaScript companion is treated as untrusted text: Pluviora only scans
+literal `n(<line>, ...)` calls to recover missing note indices and never
+executes JavaScript. If the hints are missing or incomplete, notes are indexed
+in JSON traversal order and a non-fatal warning is returned.
+
+Animation targets must include a non-null `i1`. Entries without a target are
+skipped and summarized in one warning so they cannot affect another object.
+Out-of-range BPM references are first matched against BPM values; ambiguous
+matches use the first entry and return a warning.
+
+An optional background can be supplied separately. Picture storyboard entries
+are intentionally ignored to match the reference renderer; text storyboard
+entries remain supported. The core package only accepts paths or bytes, while
+file selection is kept in the example app.
 
 The JSON root must contain these fields:
 
@@ -99,7 +105,7 @@ The JSON root must contain these fields:
 | `bpms` | array | Timing segments with `start` and `bpm` values |
 | `lines` | array | Preview lines and their `notes` arrays |
 | `animations` | array | Time-based property changes for preview objects |
-| `storyboardObjects` | array | Optional visual objects; use an empty array when unused |
+| `storyboardObjects` | array | Optional text or picture entries |
 
 See the [quick start](https://github.com/jiangyin14/Pluviora/blob/main/doc/quick_start.md#supported-document-structure)
 for a minimal valid document and input ownership details.
@@ -107,11 +113,11 @@ for a minimal valid document and input ownership details.
 ## Architecture
 
 ```text
-JSON document + optional ordering hints
+JSON document + optional static ordering hints
                   │
                   ▼
-          C++20 + yyjson
- parsing, animation, geometry, clipping
+          C++20 + yyjson + stb_truetype
+ parsing, animation, geometry, clipping, text rasterization
                   │ one synchronous FFI call per frame
                   ▼
  native-owned drawing-command buffer
@@ -135,7 +141,7 @@ dart pub publish --dry-run
 
 ## License
 
-Pluviora is available under the
+Pluviora source code is available under the
 [MIT License](https://github.com/jiangyin14/Pluviora/blob/main/LICENSE).
-Third-party dependency notices are listed in
+Bundled assets and third-party components may have separate terms; see
 [THIRD_PARTY_NOTICES.md](https://github.com/jiangyin14/Pluviora/blob/main/THIRD_PARTY_NOTICES.md).

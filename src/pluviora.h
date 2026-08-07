@@ -35,10 +35,10 @@ typedef enum PluvioraCommandType {
   PLUVIORA_COMMAND_QUAD = 2,
   PLUVIORA_COMMAND_SPRITE = 3,
   PLUVIORA_COMMAND_NOTE = 4,
-  PLUVIORA_COMMAND_TEXT = 5,
-  PLUVIORA_COMMAND_STORYBOARD_IMAGE = 6,
+  /* Command values 5 and 6 are reserved by ABI v1. */
   PLUVIORA_COMMAND_HIT_RING = 7,
-  PLUVIORA_COMMAND_PARTICLE = 8
+  PLUVIORA_COMMAND_PARTICLE = 8,
+  PLUVIORA_COMMAND_TEXT_BITMAP = 9
 } PluvioraCommandType;
 
 typedef enum PluvioraSpriteKind {
@@ -52,22 +52,6 @@ typedef enum PluvioraNoteKind {
   PLUVIORA_NOTE_DRAG = 2,
   PLUVIORA_NOTE_FRACTURE = 3
 } PluvioraNoteKind;
-
-typedef enum PluvioraStoryboardBuiltin {
-  PLUVIORA_STORYBOARD_CUSTOM = 0,
-  PLUVIORA_STORYBOARD_LINE = 1,
-  PLUVIORA_STORYBOARD_RECT = 2,
-  PLUVIORA_STORYBOARD_ROUND_RECT = 3,
-  PLUVIORA_STORYBOARD_LINE_HEAD = 4,
-  PLUVIORA_STORYBOARD_LINE_VERTICAL = 5,
-  PLUVIORA_STORYBOARD_TAP = 16,
-  PLUVIORA_STORYBOARD_HOLD = 17,
-  PLUVIORA_STORYBOARD_DRAG = 18,
-  PLUVIORA_STORYBOARD_FRACTURE = 19,
-  PLUVIORA_STORYBOARD_TAP_DOUBLE = 20,
-  PLUVIORA_STORYBOARD_FRACTURE_DOUBLE = 21,
-  PLUVIORA_STORYBOARD_EXHOLD = 22
-} PluvioraStoryboardBuiltin;
 
 typedef struct PluvioraFrameView {
   const uint8_t* data;
@@ -120,6 +104,11 @@ PLUVIORA_EXPORT PluvioraStatus pluviora_get_metadata(
     PluvioraHandle handle,
     PluvioraMetadataView* out_metadata);
 
+PLUVIORA_EXPORT PluvioraStatus pluviora_set_font_data(
+    PluvioraHandle handle,
+    const uint8_t* font_data,
+    size_t font_length);
+
 PLUVIORA_EXPORT PluvioraStatus pluviora_set_note_scale(
     PluvioraHandle handle,
     double scale);
@@ -127,12 +116,6 @@ PLUVIORA_EXPORT PluvioraStatus pluviora_set_note_scale(
 PLUVIORA_EXPORT PluvioraStatus pluviora_set_flow_speed(
     PluvioraHandle handle,
     double speed);
-
-PLUVIORA_EXPORT PluvioraStatus pluviora_set_storyboard_asset_size(
-    PluvioraHandle handle,
-    const char* name,
-    float width,
-    float height);
 
 PLUVIORA_EXPORT uint32_t pluviora_warning_count(PluvioraHandle handle);
 PLUVIORA_EXPORT const char* pluviora_warning_at(

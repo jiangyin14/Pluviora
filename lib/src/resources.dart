@@ -1,7 +1,7 @@
-import 'dart:convert';
 import 'dart:ui' as ui;
 
 import 'package:flutter/services.dart';
+import 'package:flutter_avif/flutter_avif.dart';
 
 import 'models.dart';
 import 'source.dart';
@@ -15,26 +15,25 @@ final class PluvioraResourceLoad {
 
 final class PluvioraPainterResources {
   PluvioraPainterResources({
-    required this.atlas,
+    required this.trackAnchor,
+    required this.pause,
+    required this.notes,
     required this.hitRingShader,
     required this.illustration,
-    required this.storyboards,
   });
 
-  final ui.Image atlas;
+  final ui.Image trackAnchor;
+  final ui.Image pause;
+  final Map<String, ui.Image> notes;
   final ui.FragmentShader? hitRingShader;
   final ui.Image? illustration;
-  final Map<String, ui.Image> storyboards;
 
-  static Future<ui.Image>? _atlasFuture;
+  static Future<_BundledImages>? _bundledFuture;
   static Future<ui.FragmentProgram?>? _shaderFuture;
 
-  static Future<PluvioraResourceLoad> load(
-    PluvioraSource source,
-    Uint8List documentJson,
-  ) async {
+  static Future<PluvioraResourceLoad> load(PluvioraSource source) async {
     final warnings = <PluvioraWarning>[];
-    final atlas = await (_atlasFuture ??= _loadAtlas());
+    final bundled = await (_bundledFuture ??= _loadBundledImages());
     final shader = await (_shaderFuture ??= _loadShader());
 
     ui.Image? illustration;
@@ -43,45 +42,15 @@ final class PluvioraPainterResources {
         illustration = await decode(
           await source.background!.read(),
           name: source.background!.name,
-          maxWidth: 2048,
         );
       } catch (error) {
         warnings.add(
           PluvioraWarning(
             code: 'illustration_decode_failed',
-            message: '背景图片解码失败，已使用默认背景：$error',
+            message:
+                'The background image could not be decoded; the fallback '
+                'background is being used: $error',
             asset: source.background!.name,
-          ),
-        );
-      }
-    }
-
-    final storyboards = <String, ui.Image>{};
-    for (final entry in source.overlayAssets.entries) {
-      try {
-        storyboards[entry.key] = await decode(
-          await entry.value.read(),
-          name: entry.value.name,
-          maxWidth: 1024,
-        );
-      } catch (error) {
-        warnings.add(
-          PluvioraWarning(
-            code: 'storyboard_decode_failed',
-            message: '覆盖素材解码失败，已跳过 ${entry.key}：$error',
-            asset: entry.key,
-          ),
-        );
-      }
-    }
-
-    for (final name in _requiredStoryboardAssets(documentJson)) {
-      if (!storyboards.containsKey(name)) {
-        warnings.add(
-          PluvioraWarning(
-            code: 'storyboard_asset_missing',
-            message: '缺少覆盖素材，播放时将跳过：$name',
-            asset: name,
           ),
         );
       }
@@ -89,10 +58,11 @@ final class PluvioraPainterResources {
 
     return PluvioraResourceLoad(
       PluvioraPainterResources(
-        atlas: atlas,
+        trackAnchor: bundled.trackAnchor,
+        pause: bundled.pause,
+        notes: bundled.notes,
         hitRingShader: shader?.fragmentShader(),
         illustration: illustration,
-        storyboards: storyboards,
       ),
       warnings,
     );
@@ -103,6 +73,16 @@ final class PluvioraPainterResources {
     required String name,
     int? maxWidth,
   }) async {
+    if (name.toLowerCase().endsWith('.avif')) {
+      final frames = await decodeAvif(bytes);
+      if (frames.isEmpty) {
+        throw StateError('The image contains no frames.');
+      }
+      for (final frame in frames.skip(1)) {
+        frame.image.dispose();
+      }
+      return frames.first.image;
+    }
     final codec = await ui.instantiateImageCodec(
       bytes,
       targetWidth: maxWidth,
@@ -118,16 +98,42 @@ final class PluvioraPainterResources {
   void dispose() {
     hitRingShader?.dispose();
     illustration?.dispose();
-    for (final image in storyboards.values) {
-      image.dispose();
-    }
   }
 
-  static Future<ui.Image> _loadAtlas() async {
-    final data = await rootBundle.load(
-      'packages/pluviora/files/resources/default/preview_atlas.png',
+  static Future<_BundledImages> _loadBundledImages() async {
+    Future<ui.Image> load(String path) async {
+      final data = await rootBundle.load('packages/pluviora/$path');
+      return decode(data.buffer.asUint8List(), name: path);
+    }
+
+    final images = await Future.wait([
+      load('files/resources/runtime/track_anchor.png'),
+      load('files/resources/runtime/pause.png'),
+      load('files/resources/runtime/notes/primary.png'),
+      load('files/resources/runtime/notes/primary_double.png'),
+      load('files/resources/runtime/notes/secondary.png'),
+      load('files/resources/runtime/notes/sustained.png'),
+      load('files/resources/runtime/notes/sustained_double.png'),
+      load('files/resources/runtime/notes/accent.png'),
+      load('files/resources/runtime/notes/accent_double.png'),
+      load('files/resources/runtime/notes/accent_sustained.png'),
+      load('files/resources/runtime/notes/accent_sustained_double.png'),
+    ]);
+    return _BundledImages(
+      trackAnchor: images[0],
+      pause: images[1],
+      notes: Map.unmodifiable({
+        'tap': images[2],
+        'tap_double': images[3],
+        'drag': images[4],
+        'hold': images[5],
+        'hold_double': images[6],
+        'extap': images[7],
+        'extap_double': images[8],
+        'exhold': images[9],
+        'exhold_double': images[10],
+      }),
     );
-    return decode(data.buffer.asUint8List(), name: 'preview_atlas.png');
   }
 
   static Future<ui.FragmentProgram?> _loadShader() async {
@@ -139,21 +145,16 @@ final class PluvioraPainterResources {
       return null;
     }
   }
+}
 
-  static Set<String> _requiredStoryboardAssets(Uint8List chartJson) {
-    try {
-      final root = jsonDecode(utf8.decode(chartJson)) as Map<String, dynamic>;
-      final objects = root['storyboardObjects'] as List<dynamic>? ?? const [];
-      return objects
-          .whereType<Map<String, dynamic>>()
-          .where((object) => object['type'] == 0)
-          .map((object) => object['data'])
-          .whereType<String>()
-          .where((name) => name.isNotEmpty)
-          .where((name) => !name.startsWith('builtin.'))
-          .toSet();
-    } catch (_) {
-      return const <String>{};
-    }
-  }
+final class _BundledImages {
+  const _BundledImages({
+    required this.trackAnchor,
+    required this.pause,
+    required this.notes,
+  });
+
+  final ui.Image trackAnchor;
+  final ui.Image pause;
+  final Map<String, ui.Image> notes;
 }

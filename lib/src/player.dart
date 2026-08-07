@@ -102,6 +102,8 @@ final class _PluvioraPlayerState extends State<PluvioraPlayer>
           ? null
           : await source.orderingScript!.read();
       if (!_isCurrent(token)) return;
+      await _engine.initialize();
+      if (!_isCurrent(token)) return;
       final loadResult = _engine.loadBytes(
         documentBytes,
         orderingScript: orderingScript,
@@ -109,7 +111,7 @@ final class _PluvioraPlayerState extends State<PluvioraPlayer>
 
       final audio = await _PluvioraAudio.ensureInitialized();
       final results = await Future.wait<Object>([
-        PluvioraPainterResources.load(source, documentBytes),
+        PluvioraPainterResources.load(source),
         _loadMusic(audio, source),
         _PluvioraAudio.hitSounds(),
       ]);
@@ -123,13 +125,6 @@ final class _PluvioraPlayerState extends State<PluvioraPlayer>
 
       _resources = resourceLoad.resources;
       _frames.setResources(resourceLoad.resources);
-      for (final entry in resourceLoad.resources.storyboards.entries) {
-        _engine.setStoryboardAssetSize(
-          entry.key,
-          width: entry.value.width,
-          height: entry.value.height,
-        );
-      }
       _musicSource = loadedMusic;
       final hitSounds = results[2] as (AudioSource, AudioSource);
       _hitSource = hitSounds.$1;
@@ -214,12 +209,12 @@ final class _PluvioraPlayerState extends State<PluvioraPlayer>
     final hit = _hitSource;
     final drag = _dragSource;
     if (hit != null) {
-      for (var i = 0; i < frame.hitCount.clamp(0, 16); i++) {
+      for (var i = 0; i < frame.hitCount; i++) {
         audio.play(hit, volume: _controller.sfxVolume);
       }
     }
     if (drag != null) {
-      final count = (frame.dragCount + frame.fractureCount).clamp(0, 16);
+      final count = frame.dragCount + frame.fractureCount;
       for (var i = 0; i < count; i++) {
         audio.play(drag, volume: _controller.sfxVolume);
       }
@@ -279,7 +274,7 @@ final class _PluvioraPlayerState extends State<PluvioraPlayer>
 
   @override
   Future<void> reload(PluvioraSource? source) async {
-    if (_released) throw StateError('PluvioraPlayer 已释放。');
+    if (_released) throw StateError('PluvioraPlayer has been released.');
     await _load(source ?? _source ?? widget.source);
   }
 
@@ -317,7 +312,7 @@ final class _PluvioraPlayerState extends State<PluvioraPlayer>
 
   void _ensureReady() {
     if (!_ready || _musicHandle == null) {
-      throw StateError('PluvioraPlayer 尚未加载完成。');
+      throw StateError('PluvioraPlayer has not finished loading.');
     }
   }
 
@@ -339,7 +334,7 @@ final class _PluvioraPlayerState extends State<PluvioraPlayer>
             color: const Color(0xff091124),
             child: Center(
               child: Text(
-                'Pluviora 加载失败\n$error',
+                'Pluviora failed to load\n$error',
                 textAlign: TextAlign.center,
                 style: const TextStyle(color: Colors.white),
               ),
@@ -400,12 +395,12 @@ final class _PluvioraAudio {
     Future<Uint8List> asset(String path) async =>
         (await rootBundle.load(path)).buffer.asUint8List();
     final bytes = await Future.wait([
-      asset('packages/pluviora/files/resources/default/sounds/primary.wav'),
-      asset('packages/pluviora/files/resources/default/sounds/secondary.wav'),
+      asset('packages/pluviora/files/resources/runtime/sounds/primary.ogg'),
+      asset('packages/pluviora/files/resources/runtime/sounds/secondary.ogg'),
     ]);
     return (
-      await audio.loadMem('pluviora_primary.wav', bytes[0]),
-      await audio.loadMem('pluviora_secondary.wav', bytes[1]),
+      await audio.loadMem('pluviora_primary.ogg', bytes[0]),
+      await audio.loadMem('pluviora_secondary.ogg', bytes[1]),
     );
   }
 }

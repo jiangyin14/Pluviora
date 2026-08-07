@@ -7,7 +7,7 @@ and iOS. Inputs may come from local paths or in-memory bytes.
 
 - Flutter 3.38+
 - Dart 3.10.8+
-- Android API 24+
+- Android and iOS projects supported by the selected Flutter release
 - iOS 13+
 
 Install the latest compatible release:
@@ -16,9 +16,6 @@ Install the latest compatible release:
 flutter pub add pluviora
 ```
 
-Or add `pluviora: ^0.2.0` under `dependencies` in `pubspec.yaml` and run
-`flutter pub get`.
-
 ## Prepare inputs
 
 ```text
@@ -26,8 +23,7 @@ preview_bundle/
 ├── preview.json
 ├── preview.ogg
 ├── ordering.js       # optional; scanned but never executed
-├── background.avif   # optional
-└── overlays/         # optional named images
+└── background.avif   # optional; PNG/JPEG/WebP also supported
 ```
 
 ## Supported document structure
@@ -68,10 +64,15 @@ loadable document looks like this:
 }
 ```
 
-`bpm` and `bpmId` values reference entries in the `bpms` array. Optional
-`AudioFile` and `IllustrationFile` values inside `meta` are metadata only; the
-actual audio and background inputs are supplied through `PluvioraSource`.
-Malformed or unsupported fields cause a `PluvioraException` during loading.
+`bpm` and `bpmId` normally reference entries in the `bpms` array. For archive
+compatibility, an out-of-range value is matched against the numeric BPM values.
+If several entries match, the first is used and a warning is returned.
+
+Animation entries without a non-null `i1` target are skipped. All skipped
+entries are summarized in one warning rather than being mapped to another
+object. Optional `AudioFile` and `IllustrationFile` values inside `meta` are
+metadata only; actual audio and background inputs come from `PluvioraSource`.
+Malformed required fields cause a `PluvioraException` during loading.
 
 ## Add a player
 
@@ -94,9 +95,6 @@ class _PreviewPageState extends State<PreviewPage> {
     audio: '/path/to/preview.ogg',
     orderingScript: '/path/to/ordering.js',
     background: '/path/to/background.avif',
-    overlayAssets: {
-      'overlay.png': '/path/to/overlays/overlay.png',
-    },
   );
 
   @override
@@ -107,7 +105,9 @@ class _PreviewPageState extends State<PreviewPage> {
         source: source,
         controller: controller,
         onLoaded: (result) {
-          debugPrint('Loaded ${result.metadata.title}');
+          for (final warning in result.warnings) {
+            debugPrint(warning.toString());
+          }
         },
       ),
     ),
@@ -120,6 +120,18 @@ class _PreviewPageState extends State<PreviewPage> {
   }
 }
 ```
+
+## Static ordering hints
+
+Some documents omit note indices that animation targets rely on. When an
+optional companion script is supplied, Pluviora scans literal
+`n(<line>, ...)` calls outside comments and strings to recover creation order.
+No JavaScript is executed and no other expression is evaluated.
+
+If the static sequence is absent, incomplete, or inconsistent with the JSON,
+notes receive indices in line-and-note JSON traversal order. Loading continues
+with a warning; affected note animation mappings may differ from the source
+authoring environment.
 
 ## Use in-memory inputs
 
@@ -152,17 +164,22 @@ await controller.play();
 
 Use `controller.reload(nextSource)` to replace the current input bundle.
 
-## Optional images
+## Backgrounds and storyboard entries
 
-Named overlay images are matched using identifiers stored in the preview
-document. Missing images are skipped and returned as non-fatal warnings.
+The optional `background` input supports AVIF, PNG, JPEG, and formats handled
+by Flutter's image decoder. A decode failure falls back to the built-in
+background and returns a warning.
+
+Text storyboard entries are rendered in their requested layer. Picture
+storyboard entries are intentionally skipped to preserve reference-renderer
+behavior; no separate picture-asset map is accepted by the public API.
 
 ## Troubleshooting
 
 - Controller is not connected: mount its `PluvioraPlayer` first.
 - Player is not ready: wait for `onLoaded` or the `ready` load state.
 - Audio cannot be decoded: verify platform support for the input format.
-- Ordering file is missing: rendering continues without its static hints.
-- Optional image is missing: verify its map key matches the document identifier.
+- Ordering file is missing: rendering continues with JSON traversal order.
+- Animations were skipped: inspect warnings for missing `i1` targets.
 
 See the [API guide](api.md) and [architecture notes](architecture.md).

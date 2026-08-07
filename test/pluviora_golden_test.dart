@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/widgets.dart';
@@ -46,20 +45,19 @@ const _chart = '''
 void main() {
   testWidgets('renders the neutral reference frame', (tester) async {
     final chartBytes = Uint8List.fromList(utf8.encode(_chart));
-    final atlas = await tester.runAsync(
-      () async => PluvioraPainterResources.decode(
-        await File('files/resources/default/preview_atlas.png').readAsBytes(),
-        name: 'preview_atlas.png',
+    final resourceLoad = await tester.runAsync(
+      () async => PluvioraPainterResources.load(
+        PluvioraSource(
+          document: PluvioraAsset.memory(chartBytes, name: 'fixture.json'),
+          audio: PluvioraAsset.memory(Uint8List(0), name: 'fixture.ogg'),
+        ),
       ),
     );
-    expect(atlas, isNotNull);
-    final resources = PluvioraPainterResources(
-      atlas: atlas!,
-      hitRingShader: null,
-      illustration: null,
-      storyboards: const {},
-    );
-    final engine = PluvioraEngine()..loadBytes(chartBytes);
+    expect(resourceLoad, isNotNull);
+    final resources = resourceLoad!.resources;
+    final engine = PluvioraEngine();
+    await engine.initialize();
+    engine.loadBytes(chartBytes);
     final frames = PluvioraFrameNotifier()
       ..setResources(resources)
       ..update(

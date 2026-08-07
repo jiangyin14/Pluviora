@@ -1,44 +1,90 @@
-# Pluviora 架构与 ABI v1
+# Pluviora architecture and ABI v1
 
-## 分层
+## Layers
 
-| 层 | 实现 | 职责 |
+| Layer | Implementation | Responsibility |
 | --- | --- | --- |
-| 原生核心 | C++20、yyjson 0.12.0 | 文档解析、动画索引、时间推进、几何、裁剪、确定性特效 |
-| ABI | `src/pluviora.h` | 独立实例、状态码、元数据、警告、动态帧视图 |
-| Dart 引擎 | `PluvioraEngine` | 输入内存管理、异常映射、零拷贝帧视图 |
-| 播放器 | `PluvioraPlayer` | flutter_soloud 主时钟、display-driven ticker、生命周期 |
-| 绘制 | `CustomPainter` | 移动图集、顶点四边形、文字、Storyboard、命中 Shader |
+| Native core | C++20, yyjson 0.12.0, stb_truetype 1.26 | Document parsing, animation state, geometry, clipping, effects, text rasterization |
+| C ABI | `src/pluviora.h` | Independent handles, status codes, metadata, warnings, dynamic frame views |
+| Dart engine | `PluvioraEngine` | Input memory, resource initialization, exception mapping, zero-copy views |
+| Player | `PluvioraPlayer` | flutter_soloud master clock, display ticker, lifecycle |
+| Painter | `CustomPainter` | Full-resolution textures, quads, bitmap text, hit shader, background mask |
 
-原生核心没有文件系统、图片、音频、OpenGL、GLFW 或桌面窗口依赖。路径和字节读取由 Dart 负责，音频播放位置是唯一时间源。
+The native core has no filesystem, image, audio, OpenGL, GLFW, or desktop
+window dependency. Dart reads paths or bytes and the audio playback position is
+the only playback clock.
 
-## 帧缓冲区
+## Parsing compatibility
 
-ABI 版本固定为 `1`，要求小端平台和 4 字节对齐。`PluvioraFrameView.data` 指向实例内部的动态 `std::vector<uint8_t>`；缓冲区按实际文档复杂度扩容，没有固定命令上限。
+The runtime parser consumes the JSON document directly. A companion JavaScript
+file is never evaluated; a tokenizer only scans literal `n(<line>, ...)` calls
+outside comments and strings. A complete sequence restores missing note
+indices. Otherwise the parser assigns indices in JSON traversal order and
+returns a warning.
 
-每条指令以 8 字节头开始：
+BPM references normally use an array index. Out-of-range references fall back
+to matching the numeric BPM value; the first match wins when values are
+duplicated. Animation entries without a non-null `i1` target are skipped and
+reported as one aggregate warning. This prevents an incomplete animation from
+being attached to an unrelated object.
 
-| 偏移 | 类型 | 含义 |
+## Reference behavior
+
+The core retains the reference renderer's event ordering, easing tables,
+observable integration, note grouping, rewind state, clipping tests, draw
+order, score/combo animation, full-resolution texture geometry, pre-generated
+particle model, and process-randomized effect values. Random particle and ring
+parameters can therefore differ between engine loads.
+
+Text uses the reference 48-pixel bucket rasterization algorithm backed by
+`stb_truetype`. Alpha bitmaps are run-length encoded in native memory and drawn
+as cached Flutter vertex meshes. Picture storyboard entries remain no-ops;
+text entries are emitted in background, normal, or foreground layers.
+
+## Frame buffer
+
+ABI version `1` requires a little-endian platform and 4-byte alignment.
+`PluvioraFrameView.data` points to a dynamic `std::vector<uint8_t>` owned by the
+engine instance. The vector grows with actual document complexity and has no
+fixed command limit.
+
+Every command starts with an 8-byte header:
+
+| Offset | Type | Meaning |
 | --- | --- | --- |
-| 0 | `uint16` | 指令类型 |
-| 2 | `uint16` | flags |
-| 4 | `uint32` | 指令头和有效 payload 的总长度 |
+| 0 | `uint16` | Command type |
+| 2 | `uint16` | Flags |
+| 4 | `uint32` | Header plus payload length |
 
-读取方按 `align4(offset + length)` 查找下一条指令，因此未来可以通过长度跳过未知类型。当前类型包括矩形、四边形、图集精灵、音符、文字、Storyboard 图片、命中圆环和粒子。音效触发次数位于帧视图头部，不混入几何命令。
+Readers advance to `align4(offset + length)`, so a future reader can skip an
+unknown command. Current commands cover rectangles, quads, fixed sprites,
+three-part note textures, hit rings, particles, and RLE bitmap text. Sound
+effect counts are stored in the frame view header rather than the geometry
+stream.
 
-缓冲区有效期截止到同一实例下一次 `pluviora_render`、`pluviora_load` 或 `pluviora_destroy`。`PluvioraFrameView.bytes` 是原生内存视图，不做整块 Dart 复制。
+The buffer is valid until the same instance next calls `pluviora_render`,
+`pluviora_load`, or `pluviora_destroy`. Dart exposes a native-memory view and
+does not copy the complete frame buffer.
 
-## 实例与错误
+## Instances and errors
 
-- `pluviora_create` 返回独立实例句柄，不使用全局播放器单例。
-- 所有导出函数校验句柄与参数。
-- C++ 异常不会跨越 ABI；错误会转换为 `PluvioraStatus`，详情由 `pluviora_last_error` 返回。
-- Dart 层的 `dispose` 幂等，只会调用一次原生销毁。
+- `pluviora_create` returns an independent engine handle.
+- Every exported function validates handles and arguments.
+- C++ exceptions are caught at the ABI boundary and converted to a
+  `PluvioraStatus`; details are available from `pluviora_last_error`.
+- Dart `dispose` and controller release paths are idempotent.
 
-## 热路径
+## Render path
 
-- 每个预览对象持有动画组的直接下标；逐帧不做对象属性 `unordered_map` 查询。
-- 每种属性的事件按时间排序并保留前向游标，反向跳转时安全回绕。
-- Hold 粒子只生成 `[当前时间 - 0.5s, 当前时间]` 的活动窗口。
-- 随机参数由文档内容 FNV-1a 64 位哈希和对象索引混合生成，跨平台可复现。
-- Dart 普通音符使用可复用 TypedData 和 `drawRawAtlas`；轨道与四角图片使用 `Vertices.raw`。
+- Animation events are sorted once and use forward cursors; seeking backward
+  resets the affected cursors and hit-sound state.
+- Notes are grouped by their invariant animation values and traversed in the
+  reference `Hold → Tap → Drag` order.
+- Hold particles are pre-generated at 0.01-second intervals, while other notes
+  receive ten particles per hit effect.
+- Track sprites and notes use bundled, original-dimension textures with the
+  source geometry constants and three-slice hold rendering.
+- UI and storyboard text are rasterized by C++ and cached as vertex meshes in
+  Dart; Flutter `TextPainter` is not part of the render path.
+- `CustomPainter(repaint: ...)` updates the canvas without rebuilding or
+  relaying out the widget tree each frame.

@@ -44,9 +44,12 @@ const _chart = '''
 Uint8List get _bytes => Uint8List.fromList(utf8.encode(_chart));
 
 void main() {
-  test('loads runtime JSON and exposes metadata', () {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  test('loads runtime JSON and exposes metadata', () async {
     final engine = PluvioraEngine();
     addTearDown(engine.dispose);
+    await engine.initialize();
     final result = engine.loadBytes(
       _bytes,
       orderingScript: Uint8List.fromList(utf8.encode('n(0, 0); n(0, 1);')),
@@ -58,9 +61,10 @@ void main() {
     expect(result.metadata.difficultyValue, 12.5);
   });
 
-  test('renders a dynamic, aligned native command view', () {
+  test('renders a dynamic, aligned native command view', () async {
     final engine = PluvioraEngine();
     addTearDown(engine.dispose);
+    await engine.initialize();
     engine.loadBytes(_bytes);
     final frame = engine.render(
       position: const Duration(milliseconds: 1500),
@@ -79,7 +83,10 @@ void main() {
       final type = data.getUint16(offset, Endian.little);
       final length = data.getUint32(offset + 4, Endian.little);
       if (type == 3 && data.getUint32(offset + 32, Endian.little) == 0) {
-        expect(data.getFloat32(offset + 8, Endian.little), closeTo(1160, 1e-4));
+        expect(
+          data.getFloat32(offset + 8, Endian.little),
+          closeTo(1266.25, 1e-4),
+        );
         expect(data.getFloat32(offset + 12, Endian.little), closeTo(890, 1e-4));
         foundLineHead = true;
         break;
@@ -91,9 +98,10 @@ void main() {
 
   test(
     'supports reverse seek, multiple instances, and repeated Dart release',
-    () {
+    () async {
       final first = PluvioraEngine();
       final second = PluvioraEngine();
+      await Future.wait([first.initialize(), second.initialize()]);
       first.loadBytes(_bytes);
       second.loadBytes(_bytes);
       first.render(
@@ -120,9 +128,10 @@ void main() {
     },
   );
 
-  test('turns malformed input into PluvioraException', () {
+  test('turns malformed input into PluvioraException', () async {
     final engine = PluvioraEngine();
     addTearDown(engine.dispose);
+    await engine.initialize();
     expect(
       () => engine.loadBytes(Uint8List.fromList(utf8.encode('{broken'))),
       throwsA(isA<PluvioraException>()),

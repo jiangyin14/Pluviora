@@ -34,7 +34,6 @@ class _PreviewHomeState extends State<PreviewHome> {
   String? _js;
   String? _music;
   String? _illustration;
-  final Map<String, String> _storyboards = {};
   PluvioraSource? _source;
   PluvioraController _controller = PluvioraController();
   Timer? _refresh;
@@ -89,25 +88,6 @@ class _PreviewHomeState extends State<PreviewHome> {
           audio.firstOrNull ??
           _music;
       _illustration = pairedIllustration ?? _illustration;
-      for (final image in images) {
-        if (image != pairedIllustration) {
-          _storyboards[_basename(image)] = image;
-        }
-      }
-    });
-  }
-
-  Future<void> _pickStoryboards() async {
-    final result = await FilePicker.pickFiles(
-      allowMultiple: true,
-      type: FileType.custom,
-      allowedExtensions: _imageExtensions,
-    );
-    setState(() {
-      for (final path
-          in result?.paths.whereType<String>() ?? const <String>[]) {
-        _storyboards[_basename(path)] = path;
-      }
     });
   }
 
@@ -119,7 +99,6 @@ class _PreviewHomeState extends State<PreviewHome> {
         audio: _music!,
         orderingScript: _js,
         background: _illustration,
-        overlayAssets: _storyboards,
       );
     });
   }
@@ -142,45 +121,43 @@ class _PreviewHomeState extends State<PreviewHome> {
         padding: const EdgeInsets.all(20),
         children: [
           const Text(
-            '选择特殊预览文件',
+            'Select preview files',
             style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 8),
-          const Text('JSON 与音频为必选；可选的同名 JS 只提供静态顺序提示，不会被执行。'),
+          const Text(
+            'JSON and audio are required. An optional same-stem JavaScript '
+            'file supplies static ordering hints and is never executed.',
+          ),
           const SizedBox(height: 24),
           FilledButton.icon(
             onPressed: _pickBundle,
             icon: const Icon(Icons.folder_open),
-            label: const Text('一次选择并自动配对'),
+            label: const Text('Select and pair files'),
           ),
           const SizedBox(height: 16),
-          _fileTile('预览 JSON *', _json, () async {
+          _fileTile('Preview JSON *', _json, () async {
             final path = await _pickOne(const ['json']);
             if (path != null) setState(() => _json = path);
           }),
-          _fileTile('同名 JS', _js, () async {
+          _fileTile('Same-stem JavaScript', _js, () async {
             final path = await _pickOne(const ['js']);
             if (path != null) setState(() => _js = path);
           }),
-          _fileTile('音乐 *', _music, () async {
+          _fileTile('Audio *', _music, () async {
             final path = await _pickOne(_audioExtensions);
             if (path != null) setState(() => _music = path);
           }),
-          _fileTile('背景 AVIF / PNG / JPEG', _illustration, () async {
+          _fileTile('Background AVIF / PNG / JPEG', _illustration, () async {
             final path = await _pickOne(_imageExtensions);
             if (path != null) setState(() => _illustration = path);
           }),
-          _fileTile(
-            '覆盖素材（${_storyboards.length}）',
-            _storyboards.isEmpty ? null : _storyboards.keys.join('、'),
-            _pickStoryboards,
-          ),
           const SizedBox(height: 20),
           FilledButton(
             onPressed: _json != null && _music != null ? _start : null,
             child: const Padding(
               padding: EdgeInsets.symmetric(vertical: 12),
-              child: Text('开始预览'),
+              child: Text('Start preview'),
             ),
           ),
         ],
@@ -264,7 +241,7 @@ class _PreviewHomeState extends State<PreviewHome> {
   Widget _fileTile(String title, String? path, VoidCallback onTap) => Card(
     child: ListTile(
       title: Text(title),
-      subtitle: Text(path == null ? '未选择' : _basename(path)),
+      subtitle: Text(path == null ? 'Not selected' : _basename(path)),
       trailing: const Icon(Icons.chevron_right),
       onTap: onTap,
     ),

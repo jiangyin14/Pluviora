@@ -1,3 +1,19 @@
+## 0.4.0
+
+- Reworked native playback and rendering behavior to follow the licensed
+  reference implementation, including animation state, clipping, draw order,
+  score/combo transitions, hit effects, and rewind-aware sound triggers.
+- Added bundled full-resolution runtime textures, font, and sound effects.
+- Replaced Flutter text layout with native `stb_truetype` rasterization and
+  RLE bitmap-text commands.
+- Added strict static `n(...)` note-order recovery without executing
+  JavaScript. Incomplete hints fall back to JSON traversal order with a
+  warning.
+- Added numeric BPM matching for out-of-range references and aggregate warning
+  handling for animation entries without a non-null `i1` target.
+- Removed custom picture-storyboard assets and retained the reference no-op
+  behavior for picture entries.
+
 ## 0.2.2
 
 - Removed the mandatory AVIF plugin dependency so Pluviora can coexist with

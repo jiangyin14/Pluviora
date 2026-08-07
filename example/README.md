@@ -8,9 +8,9 @@ flutter run
 ```
 
 The UI accepts a JSON document and audio file, plus optional same-stem static
-ordering hints, a background image, and named overlay images. Selecting several
-files together pairs them by filename stem; each choice can be replaced
-manually.
+ordering hints and a background image. Selecting several files together pairs
+them by filename stem; each choice can be replaced manually. The ordering file
+is scanned as text and never executed.
 
 `file_picker` is used only by the example. The core package accepts paths or
 bytes and does not depend on a file picker.

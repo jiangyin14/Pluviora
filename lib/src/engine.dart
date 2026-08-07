@@ -1,7 +1,7 @@
 import 'dart:ffi';
-import 'dart:typed_data';
 
 import 'package:ffi/ffi.dart';
+import 'package:flutter/services.dart';
 
 import '../pluviora_bindings_generated.dart' as native;
 import 'models.dart';
@@ -11,25 +11,46 @@ import 'source.dart';
 final class PluvioraEngine {
   PluvioraEngine() : _handle = native.pluviora_create() {
     if (native.pluviora_abi_version() != native.PLUVIORA_ABI_VERSION) {
-      throw const PluvioraException('原生 ABI 版本不匹配。');
+      throw const PluvioraException('Native ABI version mismatch.');
     }
     if (_handle == nullptr) {
-      throw const PluvioraException('无法创建原生 Pluviora 实例。');
+      throw const PluvioraException('Could not create a native engine.');
     }
     _finalizer.attach(this, _handle, detach: this);
   }
 
   static final Finalizer<native.PluvioraHandle> _finalizer =
       Finalizer<native.PluvioraHandle>(native.pluviora_destroy);
+  static Future<Uint8List>? _fontBytes;
 
   final native.PluvioraHandle _handle;
   bool _disposed = false;
+  bool _initialized = false;
   int _generation = 0;
 
   bool get isDisposed => _disposed;
 
+  /// Loads the bundled native rendering resources for this engine instance.
+  Future<void> initialize() async {
+    _ensureAlive();
+    if (_initialized) return;
+    final font = await (_fontBytes ??= rootBundle
+        .load('packages/pluviora/files/resources/runtime/font.ttf')
+        .then((data) => data.buffer.asUint8List()));
+    _ensureAlive();
+    final pointer = calloc<Uint8>(font.length);
+    try {
+      pointer.asTypedList(font.length).setAll(0, font);
+      _check(native.pluviora_set_font_data(_handle, pointer, font.length));
+      _initialized = true;
+    } finally {
+      calloc.free(pointer);
+    }
+  }
+
   Future<PluvioraLoadResult> load(PluvioraSource source) async {
     _ensureAlive();
+    await initialize();
     final results = await Future.wait<Uint8List>([
       source.document.read(),
       if (source.orderingScript != null) source.orderingScript!.read(),
@@ -46,8 +67,13 @@ final class PluvioraEngine {
     Uint8List? orderingScript,
   }) {
     _ensureAlive();
+    if (!_initialized) {
+      throw const PluvioraException(
+        'Call await PluvioraEngine.initialize() before loadBytes().',
+      );
+    }
     if (documentJson.isEmpty) {
-      throw const PluvioraException('预览 JSON 为空。');
+      throw const PluvioraException('The preview JSON is empty.');
     }
     final jsonPointer = calloc<Uint8>(documentJson.length);
     final jsPointer = orderingScript == null || orderingScript.isEmpty
@@ -119,27 +145,6 @@ final class PluvioraEngine {
     _check(native.pluviora_set_flow_speed(_handle, speed));
   }
 
-  void setStoryboardAssetSize(
-    String name, {
-    required int width,
-    required int height,
-  }) {
-    _ensureAlive();
-    final pointer = name.toNativeUtf8();
-    try {
-      _check(
-        native.pluviora_set_storyboard_asset_size(
-          _handle,
-          pointer.cast<Char>(),
-          width.toDouble(),
-          height.toDouble(),
-        ),
-      );
-    } finally {
-      malloc.free(pointer);
-    }
-  }
-
   void dispose() {
     if (_disposed) return;
     _disposed = true;
@@ -194,12 +199,14 @@ final class PluvioraEngine {
     if (status == native.PLUVIORA_OK) return;
     final pointer = native.pluviora_last_error(_handle);
     final message = pointer == nullptr
-        ? '原生核心返回错误。'
+        ? 'The native core returned an error.'
         : pointer.cast<Utf8>().toDartString();
     throw PluvioraException(message, status: status);
   }
 
   void _ensureAlive() {
-    if (_disposed) throw const PluvioraException('PluvioraEngine 已释放。');
+    if (_disposed) {
+      throw const PluvioraException('PluvioraEngine has been disposed.');
+    }
   }
 }

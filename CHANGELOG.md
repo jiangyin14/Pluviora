@@ -1,3 +1,10 @@
+## 1.0.1
+
+- Statically linked the Android C++ runtime into the generated native asset so
+  consumer applications can load `libpluviora.so` without separately bundling
+  `libc++_shared.so`.
+- Added release APK linkage checks for every generated Android ABI.
+
 ## 1.0.0
 
 - Promoted Pluviora to its first stable release.

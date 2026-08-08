@@ -1,9 +1,12 @@
+import 'package:code_assets/code_assets.dart';
 import 'package:hooks/hooks.dart';
 import 'package:logging/logging.dart';
 import 'package:native_toolchain_c/native_toolchain_c.dart';
 
 void main(List<String> args) async {
   await build(args, (input, output) async {
+    if (!input.config.buildCodeAssets) return;
+
     final packageName = input.packageName;
     final builder = CBuilder.library(
       name: packageName,
@@ -12,6 +15,9 @@ void main(List<String> args) async {
       includes: const ['src', 'src/third_party/yyjson'],
       language: Language.cpp,
       std: 'c++20',
+      cppLinkStdLib: input.config.code.targetOS == OS.android
+          ? 'c++_static'
+          : null,
     );
     await builder.run(
       input: input,

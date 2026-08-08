@@ -3,8 +3,8 @@
 ## Reference renderer implementation
 
 Portions of the native rendering behavior were adapted from an MIT-licensed
-reference implementation at
-https://github.com/qaqFei/easy-phi/blob/0172fcb18b312a826c700a4302402b98d47fa8bd/lib.hpp:
+reference implementation, revision
+`0172fcb18b312a826c700a4302402b98d47fa8bd`:
 
 Copyright (c) 2026 qaqFei
 

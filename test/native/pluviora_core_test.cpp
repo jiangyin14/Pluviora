@@ -35,6 +35,21 @@ uint32_t countNotes(const PluvioraFrameView& frame, uint32_t kind) {
   return count;
 }
 
+uint32_t countCommands(const PluvioraFrameView& frame, uint16_t command_type) {
+  uint32_t count = 0;
+  size_t offset = 0;
+  while (offset + 8 <= frame.length) {
+    uint16_t type = 0;
+    uint32_t length = 0;
+    std::memcpy(&type, frame.data + offset, sizeof(type));
+    std::memcpy(&length, frame.data + offset + 4, sizeof(length));
+    if (length < 8 || offset + length > frame.length) break;
+    if (type == command_type) ++count;
+    offset = (offset + length + 3) & ~size_t{3};
+  }
+  return count;
+}
+
 int main(int argc, char** argv) {
   if (argc != 4) {
     std::cerr << "usage: pluviora_core_test chart.json chart.js font.ttf\n";
@@ -87,7 +102,10 @@ int main(int argc, char** argv) {
   assert(pluviora_seek(engine, 0.5) == PLUVIORA_OK);
   assert(render(0.5).hit_count == 0);
   assert(render(1.0).hit_count == 1);
-  assert(render(1.1).hit_count == 0);
+  const auto hit_effect = render(1.1);
+  assert(hit_effect.hit_count == 0);
+  assert(countCommands(hit_effect, PLUVIORA_COMMAND_HIT_RING) > 0);
+  assert(countCommands(hit_effect, PLUVIORA_COMMAND_PARTICLE) > 0);
   assert(render(0.5).hit_count == 0);
   assert(render(1.0).hit_count == 1);
   assert(render(2.5).hit_count == 1);

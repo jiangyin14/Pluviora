@@ -1,6 +1,15 @@
+## 1.0.0
+
+- Promoted Pluviora to its first stable release.
+- Fixed hit-ring fragment output to use premultiplied alpha, removing the
+  purple bounding square on Impeller while preserving the circular expansion
+  and splash particles.
+- Added native regression coverage to keep both hit-ring and particle commands
+  active after a note hit.
+
 ## 0.4.1
 
-- Fixed Milthm visible-area unit handling so tap and drag notes remain visible
+- Fixed visible-area unit handling so tap and drag notes remain visible
   while approaching the judgment line.
 - Synchronized native playback state after explicit seeks to prevent skipped
   hit sounds from being replayed together on the next frame.

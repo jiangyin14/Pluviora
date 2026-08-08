@@ -46,5 +46,6 @@ void main() {
     float value = circularNoise(uv, 50.0, uSeed);
     alpha = value < uProgress ? 0.0 : 1.0;
   }
-  fragColor = vec4(uColor.rgb, uColor.a * alpha);
+  float outputAlpha = uColor.a * alpha;
+  fragColor = vec4(uColor.rgb * outputAlpha, outputAlpha);
 }

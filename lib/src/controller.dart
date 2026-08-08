@@ -48,11 +48,11 @@ final class PluvioraController extends ChangeNotifier {
   Future<void> seek(Duration position) => _requireDelegate().seek(position);
 
   Future<void> setPlaybackRate(double rate) async {
-    if (!rate.isFinite || rate <= 0) {
-      throw ArgumentError.value(rate, 'rate', 'Must be greater than zero.');
+    if (!rate.isFinite || rate < 0.05) {
+      throw ArgumentError.value(rate, 'rate', 'Must be at least 0.05.');
     }
-    _playbackRate = rate;
     await _requireDelegate().setPlaybackRate(rate);
+    _playbackRate = rate;
     _notify();
   }
 
@@ -101,6 +101,9 @@ final class PluvioraController extends ChangeNotifier {
   @internal
   void setLoading() {
     _loadState = PluvioraLoadState.loading;
+    _playbackState = PluvioraPlaybackState.stopped;
+    _position = Duration.zero;
+    _duration = Duration.zero;
     _error = null;
     _notify();
   }

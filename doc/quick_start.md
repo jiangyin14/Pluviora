@@ -162,6 +162,8 @@ await controller.setNoteScale(1.1);
 await controller.play();
 ```
 
+Playback rates must be at least `0.05`.
+
 Use `controller.reload(nextSource)` to replace the current input bundle.
 
 ## Backgrounds and storyboard entries

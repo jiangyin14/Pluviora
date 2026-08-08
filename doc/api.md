@@ -43,7 +43,8 @@ The required JSON fields and a minimal valid example are documented in the
 | `onLoaded` | `null` | Metadata and warning callback |
 
 Playback drives `CustomPainter` repaint notifications without rebuilding the
-widget tree for every frame. The audio playback position is the frame clock.
+widget tree for every frame. A local timestamp clock drives frames, while
+audio is synchronized at load, playback, seek, and rate-change boundaries.
 
 ## Controller
 
@@ -64,7 +65,8 @@ await controller.release();
 ```
 
 One controller can be attached to one player at a time. Dispose a controller
-that your application created after the player is no longer used.
+that your application created after the player is no longer used. Playback
+rates must be at least `0.05`, matching the audio backend's effective limit.
 
 ## Engine
 

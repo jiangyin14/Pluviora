@@ -18,7 +18,8 @@ Documentation: [Quick start](https://github.com/jiangyin14/Pluviora/blob/main/do
 - Android and iOS support through Flutter and C++ FFI.
 - Independent engine handles with no process-wide player singleton.
 - Native-owned, dynamically sized drawing-command buffers.
-- Audio-position master clock with play, pause, seek, rate, and volume control.
+- Local timestamp master clock with event-boundary audio synchronization and
+  play, pause, seek, rate, and volume control.
 - File-backed or memory-backed JSON and audio inputs.
 - Optional static `n(...)` ordering hints and AVIF/PNG/JPEG/WebP backgrounds.
 - Bundled full-resolution runtime textures, font, and sound effects.
@@ -123,7 +124,7 @@ JSON document + optional static ordering hints
  native-owned drawing-command buffer
                   │
                   ▼
- Flutter CustomPainter + audio master clock
+ Flutter CustomPainter + local timestamp master clock
 ```
 
 The native core has no filesystem, image-decoder, audio-backend, OpenGL, GLFW,

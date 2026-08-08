@@ -1,3 +1,12 @@
+## 1.0.2
+
+- Replaced per-frame audio-position polling with a local timestamp playback
+  clock and synchronized audio only at load, play, pause, seek, and rate-change
+  boundaries.
+- Added monotonic clock-correction guards, safe completed-playback handle
+  recreation, and race-free cleanup during rapid source reloads.
+- Aligned the minimum playback rate with the audio backend's `0.05` limit.
+
 ## 1.0.1
 
 - Statically linked the Android C++ runtime into the generated native asset so

@@ -10,6 +10,7 @@ import 'controller.dart';
 import 'engine.dart';
 import 'models.dart';
 import 'painter.dart';
+import 'playback_clock.dart';
 import 'resources.dart';
 import 'source.dart';
 
@@ -47,6 +48,7 @@ final class _PluvioraPlayerState extends State<PluvioraPlayer>
   late PluvioraController _controller;
   late bool _ownsController;
   final PluvioraFrameNotifier _frames = PluvioraFrameNotifier();
+  final PluvioraPlaybackClock _clock = PluvioraPlaybackClock();
 
   PluvioraSource? _source;
   PluvioraPainterResources? _resources;
@@ -171,13 +173,21 @@ final class _PluvioraPlayerState extends State<PluvioraPlayer>
       _duration = audio.getLength(_musicSource!);
       _musicHandle = audio.play(
         _musicSource!,
-        paused: !widget.autoplay,
+        paused: true,
         volume: _controller.musicVolume,
       );
       audio.setRelativePlaySpeed(_musicHandle!, _controller.playbackRate);
+      audio.seek(_musicHandle!, Duration.zero);
       _engine
+        ..seek(Duration.zero)
         ..setNoteScale(_controller.noteScale)
         ..setFlowSpeed(1.66);
+      _clock.reset(
+        duration: _duration,
+        rate: _controller.playbackRate,
+        running: false,
+      );
+      _controller.setPosition(Duration.zero);
 
       final finalResult = PluvioraLoadResult(
         metadata: loadResult.metadata,
@@ -186,6 +196,14 @@ final class _PluvioraPlayerState extends State<PluvioraPlayer>
           ...resourceLoad.warnings,
         ]),
       );
+      if (widget.autoplay) {
+        audio.setPause(_musicHandle!, false);
+        _clock.synchronize(
+          Duration.zero,
+          running: true,
+          rate: _controller.playbackRate,
+        );
+      }
       _source = source;
       _ready = true;
       _controller.setReady(finalResult, _duration);
@@ -198,6 +216,8 @@ final class _PluvioraPlayerState extends State<PluvioraPlayer>
       if (!_ticker.isActive) _ticker.start();
       if (mounted) setState(() {});
     } catch (error) {
+      if (!_isCurrent(token)) return;
+      await _disposeLoadedState();
       if (!_isCurrent(token)) return;
       _controller.setFailure(error);
       if (mounted) setState(() {});
@@ -218,11 +238,10 @@ final class _PluvioraPlayerState extends State<PluvioraPlayer>
 
   void _tick(Duration _) {
     if (!_ready || _canvasSize.isEmpty || _musicHandle == null) return;
-    final audio = SoLoud.instance;
     final state = _controller.playbackState;
     if (state != PluvioraPlaybackState.playing && !_needsRender) return;
     try {
-      final position = audio.getPosition(_musicHandle!);
+      final position = _clock.position;
       _controller.setPosition(position);
       final frame = _engine.render(
         position: position,
@@ -235,6 +254,8 @@ final class _PluvioraPlayerState extends State<PluvioraPlayer>
       if (state == PluvioraPlaybackState.playing) {
         _playHitSounds(frame);
         if (_duration > Duration.zero && position >= _duration) {
+          _clock.synchronize(_duration, running: false);
+          _controller.setPosition(_duration);
           _controller.setPlaybackState(PluvioraPlaybackState.completed);
         }
       }
@@ -263,17 +284,32 @@ final class _PluvioraPlayerState extends State<PluvioraPlayer>
   @override
   Future<void> play() async {
     _ensureReady();
-    if (_controller.playbackState == PluvioraPlaybackState.completed) {
-      await seek(Duration.zero);
+    final state = _controller.playbackState;
+    if (state == PluvioraPlaybackState.completed) {
+      _seekTo(Duration.zero);
     }
-    SoLoud.instance.setPause(_musicHandle!, false);
+    final position = _clock.position;
+    final audio = SoLoud.instance;
+    final handle = _ensureMusicHandle(audio).handle;
+    audio.seek(handle, position);
+    audio.setRelativePlaySpeed(handle, _controller.playbackRate);
+    audio.setPause(handle, false);
+    _clock.synchronize(position, running: true, rate: _controller.playbackRate);
+    _controller.setPosition(position);
     _controller.setPlaybackState(PluvioraPlaybackState.playing);
   }
 
   @override
   Future<void> pause() async {
     _ensureReady();
-    SoLoud.instance.setPause(_musicHandle!, true);
+    if (_controller.playbackState != PluvioraPlaybackState.playing) return;
+    final position = _clock.position;
+    final audio = SoLoud.instance;
+    final handle = _ensureMusicHandle(audio).handle;
+    audio.setPause(handle, true);
+    audio.seek(handle, position);
+    _clock.synchronize(position, running: false);
+    _controller.setPosition(position);
     _controller.setPlaybackState(PluvioraPlaybackState.paused);
     _needsRender = true;
   }
@@ -281,25 +317,68 @@ final class _PluvioraPlayerState extends State<PluvioraPlayer>
   @override
   Future<void> seek(Duration position) async {
     _ensureReady();
+    _seekTo(position);
+  }
+
+  void _seekTo(Duration position) {
     final clamped = Duration(
       microseconds: position.inMicroseconds.clamp(0, _duration.inMicroseconds),
     );
-    SoLoud.instance.seek(_musicHandle!, clamped);
+    final audio = SoLoud.instance;
+    final state = _controller.playbackState;
+    final ensuredHandle = _ensureMusicHandle(audio);
+    final handle = ensuredHandle.handle;
+    audio.seek(handle, clamped);
+    if (ensuredHandle.recreated && state == PluvioraPlaybackState.playing) {
+      audio.setPause(handle, false);
+    }
     _engine.seek(clamped);
+    _clock.synchronize(
+      clamped,
+      running: state == PluvioraPlaybackState.playing,
+      rate: _controller.playbackRate,
+    );
     _controller.setPosition(clamped);
+    if (state == PluvioraPlaybackState.completed && clamped < _duration) {
+      _controller.setPlaybackState(PluvioraPlaybackState.paused);
+    }
     _needsRender = true;
   }
 
   @override
   Future<void> setPlaybackRate(double rate) async {
     _ensureReady();
-    SoLoud.instance.setRelativePlaySpeed(_musicHandle!, rate);
+    final position = _clock.position;
+    if (_controller.playbackState == PluvioraPlaybackState.completed) {
+      _clock.synchronize(position, running: false, rate: rate);
+      _controller.setPosition(position);
+      return;
+    }
+    final audio = SoLoud.instance;
+    final state = _controller.playbackState;
+    final ensuredHandle = _ensureMusicHandle(audio);
+    final handle = ensuredHandle.handle;
+    audio.seek(handle, position);
+    audio.setRelativePlaySpeed(handle, rate);
+    if (ensuredHandle.recreated && state == PluvioraPlaybackState.playing) {
+      audio.setPause(handle, false);
+    }
+    _clock.synchronize(
+      position,
+      running: state == PluvioraPlaybackState.playing,
+      rate: rate,
+    );
+    _controller.setPosition(position);
   }
 
   @override
   Future<void> setMusicVolume(double volume) async {
     _ensureReady();
-    SoLoud.instance.setVolume(_musicHandle!, volume);
+    final audio = SoLoud.instance;
+    final handle = _musicHandle;
+    if (handle != null && audio.getIsValidVoiceHandle(handle)) {
+      audio.setVolume(handle, volume);
+    }
   }
 
   @override
@@ -339,8 +418,18 @@ final class _PluvioraPlayerState extends State<PluvioraPlayer>
     final audio = SoLoud.instance;
     final handle = _musicHandle;
     final source = _musicSource;
+    final resources = _resources;
     _musicHandle = null;
     _musicSource = null;
+    _resources = null;
+    _duration = Duration.zero;
+    _ready = false;
+    _clock.reset(
+      duration: Duration.zero,
+      rate: _controller.playbackRate,
+      running: false,
+    );
+    _controller.setPosition(Duration.zero);
     if (handle != null && audio.isInitialized) {
       try {
         await audio.stop(handle);
@@ -351,9 +440,26 @@ final class _PluvioraPlayerState extends State<PluvioraPlayer>
         await audio.disposeSource(source);
       } catch (_) {}
     }
-    _resources?.dispose();
-    _resources = null;
-    _ready = false;
+    resources?.dispose();
+  }
+
+  ({SoundHandle handle, bool recreated}) _ensureMusicHandle(SoLoud audio) {
+    final current = _musicHandle;
+    if (current != null && audio.getIsValidVoiceHandle(current)) {
+      return (handle: current, recreated: false);
+    }
+    final source = _musicSource;
+    if (source == null) {
+      throw StateError('PluvioraPlayer has no loaded music source.');
+    }
+    final handle = audio.play(
+      source,
+      paused: true,
+      volume: _controller.musicVolume,
+    );
+    audio.setRelativePlaySpeed(handle, _controller.playbackRate);
+    _musicHandle = handle;
+    return (handle: handle, recreated: true);
   }
 
   void _ensureReady() {

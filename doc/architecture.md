@@ -7,12 +7,13 @@
 | Native core | C++20, yyjson 0.12.0, stb_truetype 1.26 | Document parsing, animation state, geometry, clipping, effects, text rasterization |
 | C ABI | `src/pluviora.h` | Independent handles, status codes, metadata, warnings, dynamic frame views |
 | Dart engine | `PluvioraEngine` | Input memory, resource initialization, exception mapping, zero-copy views |
-| Player | `PluvioraPlayer` | flutter_soloud master clock, display ticker, lifecycle |
+| Player | `PluvioraPlayer` | Local timestamp clock, audio synchronization, display ticker, lifecycle |
 | Painter | `CustomPainter` | Full-resolution textures, quads, bitmap text, hit shader, background mask |
 
 The native core has no filesystem, image, audio, OpenGL, GLFW, or desktop
-window dependency. Dart reads paths or bytes and the audio playback position is
-the only playback clock.
+window dependency. Dart reads paths or bytes and uses `DateTime.timestamp()` as
+the playback clock, with a monotonic elapsed-time guard against system clock
+corrections. Audio is synchronized only at explicit state boundaries.
 
 ## Parsing compatibility
 

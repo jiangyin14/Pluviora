@@ -1,3 +1,8 @@
+## 1.0.3
+
+- Changed preview backgrounds to use a centered cover crop, preserving the
+  original image aspect ratio on every viewport size without letterboxing.
+
 ## 1.0.2
 
 - Replaced per-frame audio-position polling with a local timestamp playback

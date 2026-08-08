@@ -431,13 +431,17 @@ final class PluvioraPainter extends CustomPainter {
         image.height.toDouble(),
       );
       final fitted = applyBoxFit(BoxFit.cover, sourceSize, size);
+      final source = Alignment.center.inscribe(
+        fitted.source,
+        ui.Offset.zero & sourceSize,
+      );
       destination = Alignment.center.inscribe(
         fitted.destination,
         ui.Offset.zero & size,
       );
       canvas.drawImageRect(
         image,
-        ui.Offset.zero & sourceSize,
+        source,
         destination,
         ui.Paint()..filterQuality = ui.FilterQuality.medium,
       );

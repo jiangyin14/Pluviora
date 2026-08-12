@@ -15,6 +15,9 @@ void main(List<String> args) async {
       includes: const ['src', 'src/third_party/yyjson'],
       language: Language.cpp,
       std: 'c++20',
+      libraries: input.config.code.targetOS == OS.android
+          ? const ['m']
+          : const [],
       cppLinkStdLib: input.config.code.targetOS == OS.android
           ? 'c++_static'
           : null,

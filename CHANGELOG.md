@@ -1,3 +1,9 @@
+## 1.0.4
+
+- Linked Android native assets against the platform math library so
+  `libpluviora.so` can resolve functions such as `acosf`, `cosf`, and `powf`
+  when loaded on physical devices.
+
 ## 1.0.3
 
 - Changed preview backgrounds to use a centered cover crop, preserving the

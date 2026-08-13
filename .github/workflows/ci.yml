@@ -46,6 +46,10 @@ jobs:
             library=/tmp/libpluviora-${abi}.so
             unzip -p "$apk" "lib/${abi}/libpluviora.so" > "$library"
             test -s "$library"
+            if ! readelf -d "$library" | grep -q 'Shared library: \[libm.so\]'; then
+              echo "libpluviora.so is not linked against libm.so for ${abi}"
+              exit 1
+            fi
             if readelf -d "$library" | grep -q 'libc++_shared.so'; then
               echo "libpluviora.so still depends on libc++_shared.so for ${abi}"
               exit 1
